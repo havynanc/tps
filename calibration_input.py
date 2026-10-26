@@ -99,6 +99,7 @@ def fetchTPS(event,tag,etamax=3.0):
 def parseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['prop', 'res'], help='Whether the input generated is for fitting propagation or resolution')
+    parser.add_argument('--propcoord', choices=['phi', 'eta'], help='Which variables we are deriving the propagation/resolution for')
     parser.add_argument('--inFile', help='A root file or a python file with an array of root file paths, each containing tracks and stubs to build the inputs from')
     parser.add_argument('--noEosPrefix', action='store_true', help='whether to use raw input file directories (default is to give them a prefix that is needed if they are in fnal eos)')
     parser.add_argument('--inSample', help='which element of inFile to use (if inFile is a python dictionary)')
@@ -117,6 +118,7 @@ def main():
 
     args = parseArgs()
     mode = args.mode
+    propcoord = args.propcoord
     in_file = args.inFile
     eos_prefix = not args.noEosPrefix
     in_sample = args.inSample
@@ -239,9 +241,14 @@ def main():
     #sike I realized the best way to keep it centered at 0 is to use powers of 3
     #expanded dphi hist in hopes of catching higher values for higher curvatures (1024->2048, keep 256 bc memory issues (could fix by doing 1 layer at a time)
 
-    dphi_bound = 2048 if mode =='prop' else 512
-    calibrationH1 = {layer: ROOT.TH3I(f"calibrationH1_{layer}","",512,0,512,729,-16384,16384,256,-dphi_bound-0.5,dphi_bound-0.5) for layer in tf_layers}
-    calibrationH2 = {layer: ROOT.TH3I(f"calibrationH2_{layer}","",512,0,512,729,-16384,16384,256,-dphi_bound-0.5,dphi_bound-0.5) for layer in tf_layers}
+    if propcoord == 'phi':
+        bound = 2048 if mode =='prop' else 512
+        nbins = 256
+    elif propcoord == 'eta':
+        bound = 64
+        nbins = 128
+    calibrationH1 = {layer: ROOT.TH3I(f"calibrationH1_{layer}","",512,0,512,729,-16384,16384,nbins,-bound-0.5,bound-0.5) for layer in tf_layers}
+    calibrationH2 = {layer: ROOT.TH3I(f"calibrationH2_{layer}","",512,0,512,729,-16384,16384,nbins,-bound-0.5,bound-0.5) for layer in tf_layers}
 
     #eta identity prop
     '''
