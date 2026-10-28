@@ -5,7 +5,7 @@ ROOT.FWLiteEnabler.enable()
 import os
 import shutil
 import argparse
-from common import barrel_limits, fitfuncs_info, get_command_and_commit, tf_layers
+from common import barrel_limits, fitfuncs_info, get_command_and_commit, tf_layers, phib_layers
 
 
 
@@ -80,7 +80,7 @@ def dphi_hist_tail_bounds(dphi_hist, cutoff_factor=None, counter_limit=1, force_
     return upper_index, lower_index
 
 
-# look for double peaks in a 1d histogram and cut them away (cna happen with noise in bending angle input data)
+# look for double peaks in a 1d histogram and cut them away (can happen with noise in bending angle input data)
 def dphi_hist_doublepeak_bounds(dphi_hist, upper_index, lower_index):
 
     search_index = dphi_hist.GetMaximumBin()
@@ -219,10 +219,9 @@ def window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv
 def parseArgs(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['prop', 'res'], help='Whether we are fitting propagation or resolution')
-    parser.add_argument('--inputFiles', nargs='+', help='Directories containing input histograms')
+    parser.add_argument('--inputFiles', nargs='+', help='Files containing input histograms')
     parser.add_argument('--outdir', default='dy_jpsi_calibration', help='Directory to write outputs in (default: dy_jpsi_calibration)')
     parser.add_argument('--layers', nargs='+', type=int, default=tf_layers, help='Which layers to calibrate (default: all)')
-    parser.add_argument('--coords', nargs='+', choices=['coord1', 'coord2'], help='Which coord to calibrate')
     parser.add_argument('--etaRegion', choices=['barrel', 'endcap', 'inclusive'], default='inclusive', help='whether to fit in barrel, endcap, or both (inclusive) (default: inclusive)')
     parser.add_argument('--overwrite', action='store_true', help='if output directories are allowed to be overwritten (otherwise it is impossible to delete things by mistake)')
     parser.add_argument('--etaWidth', type=int, default=16, help='Width of eta slices used to conduct calibration fits in (default 16)')
@@ -266,8 +265,6 @@ def main():
     input_files = args.inputFiles
     outdir = args.outdir
     layers = args.layers
-    coords = args.coords
-    coord = coords[0] # just do one for now
     eta_region = args.etaRegion
     overwrite = args.overwrite
     etaWidth = args.etaWidth
@@ -282,7 +279,7 @@ def main():
     # Specify the approach to be taken in order to compute the "average" dphi over each 1D slice of eta and k (dphi histograms)
     # True: first attempt to fit a gaussian around the histogram's mean. If this fails (outright faiure or high error in fit params), fall back on the following
     # False: considering only the bins touching the central peak (mode), directly compute the mean and std. If there is no data, no value is reported.
-    #        Also discard skewed tails if there are many data points and discard secondary peaks for coord2 barrel.
+    #        Also discard skewed tails if there are many data points and discard secondary peaks for phib.
 
     try_range_fit = args.tryRangeFit
     fit_radius = args.fitRadius
@@ -319,7 +316,7 @@ def main():
     # make output directories and throw an error if we would accidentally overwrite one of the layer directories
     out_paths = []
     for layer in layers:
-        out_paths.append(f'{outdir}/{mode}/{coord}/{eta_region}/layer{layer}')
+        out_paths.append(f'{outdir}/{mode}/{eta_region}/layer{layer}')
     for out_path in out_paths:
         if os.path.isdir(out_path):
             if overwrite:
@@ -330,8 +327,6 @@ def main():
     
     os.chdir(outdir)
     os.chdir(mode)
-
-    os.chdir(coord)
     os.chdir(eta_region)
 
     # first set up the output graphs, organized by fit param then by layer
@@ -341,8 +336,8 @@ def main():
         for i in range(num_params):
             index = i+1 if mode == 'prop' else i
             g = ROOT.TGraphErrors()
-            g.SetName(f'{mode}{index}_{coord}_{layer}')
-            g.SetTitle(f'Coord {coord[-1]} Layer {layer} {mode}{index} vs eta')
+            g.SetName(f'{mode}{index}_{layer}')
+            g.SetTitle(f'{mode}{index} layer {layer} vs eta')
             g.GetXaxis().SetTitle('prop_eta')
             g.GetYaxis().SetTitle(f'{mode}{index}') 
             g.SetMarkerStyle(20)
@@ -352,15 +347,12 @@ def main():
 
     for name in hist_names:
 
-        #check if coord of histogram is coord we are currently looking at
-        if name[-3] != coord[-1]:
-            continue 
-        #check if we are considering this layer
+        #check if we are considering this layer (thank god the new layer is still one digit)
         layer = int(name[-1])
         if layer not in layers:
             continue
 
-        print(f'Processing {name} (coord {coord[-1]} layer {layer}):') 
+        print(f'Processing {name} (layer {layer}):') 
 
         #get data
         h = rfiles[0].Get(name)
@@ -372,11 +364,11 @@ def main():
         h.GetXaxis().SetTitle('prop_eta')
         h.GetYaxis().SetTitle('track_curvature')
         #label for 'dphi' axis depends on what exactly we plotted
-        if coord == 'coord1':
-            h.GetZaxis().SetTitle(f'{coord} (deltaphi)')
+        if layer not in phib_layers :
+            h.GetZaxis().SetTitle('deltaphi')
             #h.GetZaxis().SetTitle(f'{coord} (deta)')
-        if coord == 'coord2':
-            h.GetZaxis().SetTitle(f'{coord} (deltaphi for endcap, phib for barrel)')
+        else:
+            h.GetZaxis().SetTitle('deltaphi for endcap, phib for barrel')
             #h.GetZaxis().SetTitle(f'{coord} (deta)')
         if mode == 'res':
             h.GetZaxis().SetTitle(h.GetZaxis().GetTitle() + ' res')
@@ -430,7 +422,7 @@ def main():
             print(f'    Slice {etaLower} <= eta < {etaUpper+1}')
             
             #extract the slice and skip to the next if it's empty
-            h.GetXaxis().SetRange(etaLower, etaUpper)    
+            h.GetXaxis().SetRange(etaLower+1, etaUpper+1)    
             hist_2d = h.Project3D('zy')
             if hist_2d.GetEntries() == 0:
                 continue
@@ -472,8 +464,8 @@ def main():
 
             fitslices_graph = ROOT.TGraphErrors()
             fitslices_graph.GetXaxis().SetTitle('track_curvature')
-            fitslices_graph.SetTitle(f'Layer {layer}, eta {etaLower}-{etaUpper} fitted {mode} {coord}')
-            fitslices_graph.GetYaxis().SetTitle(f'fitted {mode} {coord}')
+            fitslices_graph.SetTitle(f'Layer {layer}, eta {etaLower}-{etaUpper} fitted {mode}')
+            fitslices_graph.GetYaxis().SetTitle(f'fitted {mode}')
 
             #more customizables version of fitslices now begins
 
@@ -497,7 +489,7 @@ def main():
                 if n < num_entries_cutoff or peakheight < peak_cutoff:
                     continue
 
-                #for coord2 barrel, don't look at curvatur too high to be seen (for coord1, error removal would take care of this)
+                #for phib, don't look at curvatur too high to be seen (for deltaphi, error removal would take care of this)
                 if abs(k_axis.GetBinCenter(i)) > initial_k_cutoff:
                     continue 
                 
@@ -532,7 +524,7 @@ def main():
                 if (not range_fit_status):
                     #fit failed/wasn't tried. directly use sample mean and stddv and the standard errors thereof after trimming past the central bulge
                         
-                    #look at everything if curvature is high enough (for coord2 barrel)
+                    #look at everything if curvature is high enough (for phib)
                     trim = not (abs(k_axis.GetBinCenter(i)) > 3000)# and isBarrel)# and coord == 'coord2')
                     lower_index = -1
                     upper_index = dphi_hist.GetNbinsX() + 2
@@ -554,8 +546,8 @@ def main():
 
                         upper_index, lower_index = dphi_hist_tail_bounds(dphi_hist, cutoff_factor=cutoff_factor, counter_limit=counter_limit, force_center_peak=force_center_peak, dphi_override_radius=dphi_override_radius, symmetrization_thresh=symmetrization_thresh)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 
-                        #try to remedy double peaks from noise and signal being close in coord 2 barrel
-                        if mode == 'prop' and coord == 'coord2':
+                        #try to remedy double peaks from noise and signal being close in phib
+                        if mode == 'prop' and (layer in phib_layers):
                             upper_index, lower_index = dphi_hist_doublepeak_bounds(dphi_hist, upper_index, lower_index)
 
                         #now actually trim the data
@@ -625,7 +617,7 @@ def main():
                     layer_coeff_graphs[layer].SetPointError(layer_coeff_graphs[layer].GetN()-1, etaWidth/2, fitslices_fit.ParError(k))
         
             #get the 2d hist and fit graph overlaid to check that it makes sense
-            hist_2d.SetTitle(f'Coord {coord[-1]}, Layer {layer}, {etaLower} <= eta < {etaUpper+1}')
+            hist_2d.SetTitle(f'Layer {layer}, {etaLower} <= eta < {etaUpper+1}')
             hist_2d.SetStats(0)
             hist_2d.Draw('COLZ')
             # fitslices_graph.SetLineColor(ROOT.TColor.GetColorTransparent(9, 1))
@@ -650,7 +642,7 @@ def main():
             index = k+1 if (mode == 'prop') else k
             layer_coeff_graphs[layer].Draw('AP')
             c.Draw()
-            c.SaveAs(f'{mode}{index}_{coord}_{layer}.png')
+            c.SaveAs(f'{mode}{index}_{layer}.png')
         
         h.Delete()
         os.chdir('..') # now finished for this hist
@@ -670,8 +662,6 @@ def main():
             ROOT.TNamed(f'command_{g.GetName()}', command).Write()
             ROOT.TNamed(f'commit_{g.GetName()}', commit).Write()
     f.Close()
-
-    os.chdir('../..') # now finished for this coord
 
 
 

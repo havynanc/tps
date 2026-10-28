@@ -113,10 +113,9 @@ def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sa
 def parseArgs(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--mode', choices=['prop', 'res'], help='Whether we are handling propagation or resolution coefficients')
-    parser.add_argument('--coord', choices=['coord1', 'coord2'], help='Whether we are handling coord1 or coord2 (one at a time)')
     parser.add_argument('--inputBarrelFile', help='Input root file containing fitted calibration parameter graphs for barrel')
     parser.add_argument('--inputEndcapFile', help='Input root file containing fitted calibration parameter graphs for endcap')
-    parser.add_argument('--outdir', default='./output_LUTs/', help='Directory to write outputs in')
+    parser.add_argument('--outdir', default='./output_LUTs/', help='Directory to write outputs in (default: ./output_LUts/)')
     parser.add_argument('--overwrite', action='store_true', help='overwrite existing LUTs that this would collide with')
     parser.add_argument('--config', help='python file containing config for interpolation and LUT format')
     args = parser.parse_args(argv)
@@ -132,7 +131,6 @@ def main():
 
     args = parseArgs()
     mode = args.mode
-    coord = args.coord
     barrel_file = ROOT.TFile.Open(args.inputBarrelFile)
     endcap_file = ROOT.TFile.Open(args.inputEndcapFile)
     outdir = args.outdir
@@ -144,11 +142,10 @@ def main():
     num_cols = config.num_cols
     factor_bits = config.factor_bits
     lut_bits = config.lut_bits
-    trash_eta_zones_by_layer_coord1 = config.trash_eta_zones_by_layer_coord1
-    trash_eta_zones_by_layer_coord2 = config.trash_eta_zones_by_layer_coord2
+    trash_eta_zones_by_layer = config.trash_eta_zones_by_layer
 
-    outfile_txt_name = f'{outdir}/{mode}_{coord}_LUTs.txt'
-    outfile_py_name = f'{outdir}/{mode}_{coord}_LUTs.py'
+    outfile_txt_name = f'{outdir}/{mode}_LUTs.txt'
+    outfile_py_name = f'{outdir}/{mode}_LUTs.py'
     if not args.overwrite and (os.path.isfile(outfile_txt_name) or os.path.isfile(outfile_py_name)):
         raise Exception('output files already exist and --overwrite was not specified')
     outfile_txt = open(outfile_txt_name, 'w')
@@ -209,14 +206,12 @@ def main():
 
         print(f'Processing {name}')
 
-        param, coord_, layer = name.split('_')
+        param, layer = name.split('_')
         layer = int(layer)
-        if coord_ != coord:
-            raise Exception('the coord specified does not match that of the input files')
         
         barrel_graph = barrel_file.Get(name) if input_graph_regions[name] != 'endcap' else None
         endcap_graph = endcap_file.Get(name) if input_graph_regions[name] != 'barrel' else None
-        trash_eta_zones = trash_eta_zones_by_layer_coord1[layer] if coord == 'coord1' else trash_eta_zones_by_layer_coord2[layer]
+        trash_eta_zones = trash_eta_zones_by_layer[layer]
         table, interpo_graph, barrel_graph, endcap_graph = clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sample_eta, barrel_limits[layer])
         
         # save diagnostic plot

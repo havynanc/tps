@@ -376,10 +376,13 @@ def ptLookup(absCurv):
 
 pt_to_gev_factor = 0.03125
 
-tf_layers = [0, 1, 2, 3, 4]
+tf_layers = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+phib_layers = [1, 3, 5, 7]
+phi_layers = [l for l in tf_layers if l not in phib_layers]
+phib_to_phi_layer_map = {1:0, 3:2, 5:4, 7:6}
 
-# barrel if below this (equal ==> endcap)
-barrel_limits = [228, 179, 154, 154, 0]
+# barrel if below this (equal ==> endcap but that should never happen)
+barrel_limits = [228, 228, 179, 179, 154, 154, 146, 146, 0, 0]
 
 # load a python file (e.g. a config) by path and return it as a module
 def load_module_from_file(file_name):
