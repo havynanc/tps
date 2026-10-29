@@ -222,9 +222,9 @@ def main():
         c.SaveAs(f'{outdir}/interpo_{name}.png')
 
         # now make the LUTs
-        factor = 2**(factor_bits[param])
+        factor = 2**(factor_bits[name])
         max_entry = 2**lut_bits[param] - 1
-        table = 2**(factor_bits[param]) * table + 0.5
+        table = factor * table + 0.5
         table = table.astype(int)
         for index, entry in enumerate(table):
             if entry > max_entry:

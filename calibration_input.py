@@ -143,7 +143,7 @@ class Propagator:
         p = []
         for i, coeff in enumerate(self.coeffs):
             name = f'{coeff}_{layer}'
-            p.append(self.grand_prop_LUT[name][prop_eta // self.eta_divider] / (2**self.factor_bits[coeff]))
+            p.append(self.grand_prop_LUT[name][prop_eta // self.eta_divider] / (2**self.factor_bits[name]))
 
         # latest value of name is fine here
         if isBarrel:
