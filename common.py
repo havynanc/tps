@@ -411,6 +411,24 @@ def get_command_and_commit():
 # the python function needs to cast anything in *args to the correct type from the string from CLI
 # quantize is for applying a machine-faithful propagation in the input generation, BAD for fitting bc gradients
 
+name_linear = 'linear'
+parlimits_linear = [[0, 1]]
+initparams_linear = [0]
+def fitfunc_linear(x, p, *args, quantize=False):
+    out = -p[0]*x[0]
+    return out if not quantize else int(out)
+
+name_Eloss = 'Eloss'
+parlimits_Eloss = [[0, 1], [0, 1]]
+initparams_Eloss = [0, 0]
+def fitfunc_Eloss(x, p, *args, quantize=False):
+    term1 = -p[0]*x[0]
+    term2 = -p[1]*x[1]*abs(x[1])
+    if not quantize:
+        return term1 + term2
+    else
+        return int(term1) + int(term2)
+
 name_3param = '3param'
 parlimits_3param = [[0, 1], [0, 1], [0, 1]]
 initparams_3param = [0, 0, 0]
@@ -454,7 +472,9 @@ def fitfunc_resfit(x, p, *args, quantize=False):
     else:
         return max(16, int(p[0]) + int(p[1]*abs(x[0])))
 
-fitfuncs_info = {name_3param: {'parlimits': parlimits_3param, 'initparams': initparams_3param, 'fitfunc': fitfunc_3param}, 
+fitfuncs_info = {name_linear: {'parlimits': parlimits_linear, 'initparams': initparams_linear, 'fitfunc': fitfunc_linear}, 
+                 name_Eloss: {'parlimits': parlimits_Eloss, 'initparams': initparams_Eloss, 'fitfunc': fitfunc_Eloss}, 
+                 name_3param: {'parlimits': parlimits_3param, 'initparams': initparams_3param, 'fitfunc': fitfunc_3param}, 
                  name_pure_quadratic: {'parlimits': parlimits_pure_quadratic, 'initparams': initparams_pure_quadratic, 'fitfunc': fitfunc_pure_quadratic}, 
                  name_quartic: {'parlimits': parlimits_quartic, 'initparams': initparams_quartic, 'fitfunc': fitfunc_quartic}, 
                  name_resfit: {'parlimits': parlimits_resfit, 'initparams': initparams_resfit, 'fitfunc': fitfunc_resfit}
