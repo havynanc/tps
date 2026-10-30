@@ -117,19 +117,30 @@ class Propagator:
             self.grand_prop_LUT = {}
             self.barrel_fitfuncs = {}
             self.barrel_fitfunc_args = {}
+            self.barrel_fitfunc_params = {}
             self.endcap_fitfuncs = {}
             self.endcap_fitfunc_args = {}
+            self.endcap_fitfunc_params = {}
+
             from calibration_fit import parseArgs as command_reader
-            for name, command in barrel_commands.items():
-                # structure is such that barrel and endcap commands lists both have all the same names
-                self.grand_prop_LUT[name] = getattr(prop_module, f'lt_{name}')
+
+            for layer, command in barrel_commands.items():
                 cal_args = command_reader(shlex.split(command)[2:])
-                self.barrel_fitfuncs[name] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
-                self.barrel_fitfunc_args[name] = cal_args.fitfuncArgs
-            for name, command in endcap_commands.items():
+                self.barrel_fitfuncs[layer] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
+                self.barrel_fitfunc_args[layer] = cal_args.fitfuncArgs
+                nparams = len(fitfuncs_info[cal_args.fitfunc]['initparams'])
+                self.barrel_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
+                for param in self.barrel_fitfunc_params[layer]:
+                    self.grand_prop_LUT[param] = getattr(prop_module, f'lt_{param}')
+                    
+            for layer, command in endcap_commands.items():
                 cal_args = command_reader(shlex.split(command)[2:])
-                self.endcap_fitfuncs[name] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
-                self.endcap_fitfunc_args[name] = cal_args.fitfuncArgs
+                self.endcap_fitfuncs[layer] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
+                self.endcap_fitfunc_args[layer] = cal_args.fitfuncArgs
+                nparams = len(fitfuncs_info[cal_args.fitfunc]['initparams'])
+                self.endcap_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
+                for param in self.endcap_fitfunc_params[layer]:
+                    self.grand_prop_LUT[param] = getattr(prop_module, f'lt_{param}') # repeating some here is fine since LUTs span all eta
 
             assert 512 % len(getattr(prop_module, f'lt_{next(iter(self.grand_prop_LUT))}')) == 0
             self.eta_divider = 512 // len(getattr(prop_module, f'lt_{next(iter(self.grand_prop_LUT))}'))
@@ -140,16 +151,15 @@ class Propagator:
         if self.trivial_propagate:
             return track_coord_int
 
+        params = self.barrel_fitfunc_params if isBarrel else self.endcap_fitfunc_params
         p = []
-        for i, coeff in enumerate(self.coeffs):
-            name = f'{coeff}_{layer}'
-            p.append(self.grand_prop_LUT[name][prop_eta // self.eta_divider] / (2**self.factor_bits[name]))
+        for param in params:
+            p.append(self.grand_prop_LUT[param][prop_eta // self.eta_divider] / (2**self.factor_bits[param]))
 
-        # latest value of name is fine here
         if isBarrel:
-            deltacoord = self.barrel_fitfuncs[name]([k], p, *self.barrel_fitfunc_args[name], quantize=True)
+            deltacoord = self.barrel_fitfuncs[layer]([k], p, *self.barrel_fitfunc_args[layer], quantize=True)
         else:
-            deltacoord = self.endcap_fitfuncs[name]([k], p, *self.endcap_fitfunc_args[name], quantize=True)
+            deltacoord = self.endcap_fitfuncs[layer]([k], p, *self.endcap_fitfunc_args[layer], quantize=True)
         
         if self.prop_coord == 'phi':
             return deltaPhiINT(track_coord_int + deltacoord, 0)

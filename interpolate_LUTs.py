@@ -2,37 +2,40 @@ import numpy as np
 import ROOT
 import os
 import argparse
-from common import barrel_limits, load_module_from_file, get_command_and_commit
+from common import barrel_limits, load_module_from_file, get_command_and_commit, tf_layers
 
 
 
-def format_graph_command_info(input_graph_regions, barrel_file, endcap_file):
+def format_graph_command_info(barrel_file, endcap_file):
 
     barrel_commands_str = 'barrel_commands = {'
     barrel_commits_str = 'barrel_commits = {'
     endcap_commands_str = 'endcap_commands = {'
     endcap_commits_str = 'endcap_commits = {'
 
-    for name, region in input_graph_regions.items():
+    barrel_command_keys = [key.GetName() for key in barrel_file.GetListOfKeys() if key.GetName().startswith(('command'))]
+    endcap_command_keys = [key.GetName() for key in endcap_file.GetListOfKeys() if key.GetName().startswith(('command'))]
 
-        if input_graph_regions[name] != 'endcap':
-            barrel_command = barrel_file.Get(f'command_{name}').GetTitle()
-            barrel_commit = barrel_file.Get(f'commit_{name}').GetTitle()
+    for layer in tf_layers:
+
+        if f'command_{layer}' in barrel_command_keys:
+            barrel_command = barrel_file.Get(f'command_{layer}').GetTitle()
+            barrel_commit = barrel_file.Get(f'commit_{layer}').GetTitle()
         else:
-            barrel_command = endcap_file.Get(f'command_{name}').GetTitle()
-            barrel_commit = endcap_file.Get(f'commit_{name}').GetTitle()
+            barrel_command = endcap_file.Get(f'command_{layer}').GetTitle()
+            barrel_commit = endcap_file.Get(f'commit_{layer}').GetTitle()
         
-        if input_graph_regions[name] != 'barrel':
-            endcap_command = endcap_file.Get(f'command_{name}').GetTitle()
-            endcap_commit = endcap_file.Get(f'commit_{name}').GetTitle()
+        if f'command_{layer}' in endcap_command_keys:
+            endcap_command = endcap_file.Get(f'command_{layer}').GetTitle()
+            endcap_commit = endcap_file.Get(f'commit_{layer}').GetTitle()
         else:
-            endcap_command = barrel_file.Get(f'command_{name}').GetTitle()
-            endcap_commit = barrel_file.Get(f'commit_{name}').GetTitle()
+            endcap_command = barrel_file.Get(f'command_{layer}').GetTitle()
+            endcap_commit = barrel_file.Get(f'commit_{layer}').GetTitle()
         
-        barrel_commands_str = barrel_commands_str + f"'{name}': '{barrel_command}',\n                   "
-        endcap_commands_str = endcap_commands_str + f"'{name}': '{endcap_command}',\n                   "
-        barrel_commits_str = barrel_commits_str + f"'{name}': '{barrel_commit}',\n                  "
-        endcap_commits_str = endcap_commits_str + f"'{name}': '{endcap_commit}',\n                  "
+        barrel_commands_str = barrel_commands_str + f"'{layer}': '{barrel_command}',\n                   "
+        endcap_commands_str = endcap_commands_str + f"'{layer}': '{endcap_command}',\n                   "
+        barrel_commits_str = barrel_commits_str + f"'{layer}': '{barrel_commit}',\n                  "
+        endcap_commits_str = endcap_commits_str + f"'{layer}': '{endcap_commit}',\n                  "
     
     barrel_commands_str = barrel_commands_str + '}\n\n'
     endcap_commands_str = endcap_commands_str + '}\n\n'
@@ -186,7 +189,7 @@ def main():
     input_graph_regions = dict(sorted(input_graph_regions.items()))
 
     # save the command info for each input graph at the top of the output files
-    barrel_commands_str, endcap_commands_str, barrel_commits_str, endcap_commits_str = format_graph_command_info(input_graph_regions, barrel_file, endcap_file)
+    barrel_commands_str, endcap_commands_str, barrel_commits_str, endcap_commits_str = format_graph_command_info(barrel_file, endcap_file)
     outfile_py.write(barrel_commands_str)
     outfile_py.write(endcap_commands_str)
     outfile_py.write(barrel_commits_str)
@@ -209,8 +212,8 @@ def main():
         param, layer = name.split('_')
         layer = int(layer)
         
-        barrel_graph = barrel_file.Get(name) if input_graph_regions[name] != 'endcap' else None
-        endcap_graph = endcap_file.Get(name) if input_graph_regions[name] != 'barrel' else None
+        barrel_graph = barrel_file.Get(name) if region != 'endcap' else None
+        endcap_graph = endcap_file.Get(name) if region != 'barrel' else None
         trash_eta_zones = trash_eta_zones_by_layer[layer]
         table, interpo_graph, barrel_graph, endcap_graph = clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sample_eta, barrel_limits[layer])
         

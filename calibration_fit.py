@@ -222,7 +222,7 @@ def parseArgs(argv=None):
     parser.add_argument('--inputFiles', nargs='+', help='Files containing input histograms')
     parser.add_argument('--outdir', default='dy_jpsi_calibration', help='Directory to write outputs in (default: dy_jpsi_calibration)')
     parser.add_argument('--layers', nargs='+', type=int, default=tf_layers, help='Which layers to calibrate (default: all)')
-    parser.add_argument('--etaRegion', choices=['barrel', 'endcap', 'inclusive'], default='inclusive', help='whether to fit in barrel, endcap, or both (inclusive) (default: inclusive)')
+    parser.add_argument('--etaRegion', choices=['barrel', 'endcap'], help='whether to fit in barrel or endcap')
     parser.add_argument('--overwrite', action='store_true', help='if output directories are allowed to be overwritten (otherwise it is impossible to delete things by mistake)')
     parser.add_argument('--etaWidth', type=int, default=16, help='Width of eta slices used to conduct calibration fits in (default 16)')
     parser.add_argument('--fitfunc', type=str, default=None, help='which function to fit dphi vs k to')
@@ -306,6 +306,7 @@ def main():
     c = ROOT.TCanvas('canvas', 'canvastitle', 1200, 800)
     c.SetLeftMargin(0.15)
     c.SetRightMargin(0.15)
+    c.SetBottomMargin(0.15)
     c.SetLogz()
 
     rfiles = []
@@ -347,8 +348,7 @@ def main():
 
     for name in hist_names:
 
-        #check if we are considering this layer (thank god the new layer is still one digit)
-        layer = int(name[-1])
+        layer = int(name.split('_')[-1])
         if layer not in layers:
             continue
 
@@ -362,16 +362,14 @@ def main():
             h_temp.Delete()
 
         h.GetXaxis().SetTitle('prop_eta')
-        h.GetYaxis().SetTitle('track_curvature')
+        h.GetYaxis().SetTitle('track curvature #it{k}')
         #label for 'dphi' axis depends on what exactly we plotted
-        if layer not in phib_layers :
-            h.GetZaxis().SetTitle('deltaphi')
-            #h.GetZaxis().SetTitle(f'{coord} (deta)')
+        if (layer in phib_layers) and (eta_region == 'barrel'):
+            h.GetZaxis().SetTitle('bending angle #it{#phi_{b}}')
         else:
-            h.GetZaxis().SetTitle('deltaphi for endcap, phib for barrel')
-            #h.GetZaxis().SetTitle(f'{coord} (deta)')
+            h.GetZaxis().SetTitle('propagated angle #it{#Delta#phi}')
         if mode == 'res':
-            h.GetZaxis().SetTitle(h.GetZaxis().GetTitle() + ' res')
+            h.GetZaxis().SetTitle(f'res of {h.GetZaxis().GetTitle()}')
             
         h.Rebin3D(coarsening_ratio[0], coarsening_ratio[1], coarsening_ratio[2]) #not sure about the errors computed with this method
         k_axis = h.GetYaxis()
@@ -388,17 +386,17 @@ def main():
             
         hproj_eta.Draw()
         c.Draw()
-        c.SaveAs(f'{hproj_eta.GetTitle()}.png')
+        c.SaveAs('proj_eta.png')
         c.Clear()
         hproj_eta.Delete()
         hproj_k.Draw()
         c.Draw()
-        c.SaveAs(f'{hproj_k.GetTitle()}.png')
+        c.SaveAs('proj_k.png')
         c.Clear()
         hproj_k.Delete()
         hproj_dphi.Draw()
         c.Draw()
-        c.SaveAs(f'{hproj_dphi.GetTitle()}.png')
+        c.SaveAs('proj_dphi.png')
         c.Clear()
         hproj_dphi.Delete()
 
@@ -424,6 +422,9 @@ def main():
             #extract the slice and skip to the next if it's empty
             h.GetXaxis().SetRange(etaLower+1, etaUpper+1)    
             hist_2d = h.Project3D('zy')
+            hist_2d.SetTitle(f'Layer {layer}, {etaLower} <= eta < {etaUpper+1}')
+            hist_2d.GetYaxis().SetTitleOffset(1.5)
+            hist_2d.SetStats(0)
             if hist_2d.GetEntries() == 0:
                 continue
 
@@ -432,7 +433,7 @@ def main():
             os.mkdir(dirname)
             os.chdir(dirname)
         
-            hist_2d.Draw()
+            hist_2d.Draw('COLZ')
             c.Draw()
             c.SaveAs(f'{hist_2d.GetName()}.png')
         
@@ -474,7 +475,7 @@ def main():
                     
                 if drop_central_k_bin and mode == 'res' and i == hist_2d.GetNbinsX()//2 + 1:
                     continue
-                dphi_hist = hist_2d.ProjectionY(f'center k {k_axis.GetBinCenter(i)}', i, i)
+                dphi_hist = hist_2d.ProjectionY(f'center k {np.round(k_axis.GetBinCenter(i), 2)}', i, i)
                 if mode == 'res' and res_reflect_sym:
                     dphi_hist.Add(hist_2d.ProjectionY('', hist_2d.GetNbinsX()+1-i, hist_2d.GetNbinsX()+1-i))
                 # n = dphi_hist.GetEntries()
@@ -605,10 +606,6 @@ def main():
                 except:
                     pass
                 fitslices_fit = fitslices_graph.Fit(fitfunc, options_str, '', -16384, 16384)
-                
-            #fitfunc.Draw()
-            c.Draw()
-            c.SaveAs(f'fitslices_{mode}.png')
 
             #add these fitted params to the output graphs if they have enough points 
             if (fitslices_graph.GetN() >= min_fitslices_points):
@@ -617,8 +614,6 @@ def main():
                     layer_coeff_graphs[layer].SetPointError(layer_coeff_graphs[layer].GetN()-1, etaWidth/2, fitslices_fit.ParError(k))
         
             #get the 2d hist and fit graph overlaid to check that it makes sense
-            hist_2d.SetTitle(f'Layer {layer}, {etaLower} <= eta < {etaUpper+1}')
-            hist_2d.SetStats(0)
             hist_2d.Draw('COLZ')
             # fitslices_graph.SetLineColor(ROOT.TColor.GetColorTransparent(9, 1))
             fitslices_graph.Draw('s')
@@ -629,7 +624,7 @@ def main():
                 except:
                     pass
             c.Draw()    
-            c.SaveAs(f'{mode}_hist_overlay.png')
+            # c.SaveAs(f'{mode}_hist_overlay.png')
             c.SaveAs(f'../overlays/{j}.png')            
 
             hist_2d.Delete()
@@ -652,15 +647,15 @@ def main():
     f=ROOT.TFile(f"{mode}_graphs.root","UPDATE")
     f.cd()
     command, commit = get_command_and_commit()
-    for layer_coeff_graphs in coeff_graphs:
-        for layer in layers:
+    for layer in layers:
+        f.Delete(f'command_{layer};*')
+        f.Delete(f'commit_{layer};*')
+        ROOT.TNamed(f'command_{layer}', command).Write()
+        ROOT.TNamed(f'commit_{layer}', commit).Write()
+        for layer_coeff_graphs in coeff_graphs:
             g = layer_coeff_graphs[layer]
             f.Delete(f'{g.GetName()};*')
             g.Write()
-            f.Delete(f'command_{g.GetName()};*')
-            f.Delete(f'commit_{g.GetName()};*')
-            ROOT.TNamed(f'command_{g.GetName()}', command).Write()
-            ROOT.TNamed(f'commit_{g.GetName()}', commit).Write()
     f.Close()
 
 
