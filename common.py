@@ -455,13 +455,19 @@ name_pure_quadratic = 'pure_quadratic'
 parlimits_pure_quadratic = [[0, 3e-7]]
 initparams_pure_quadratic = [0]
 def fitfunc_pure_quadratic(x, p, *args, quantize=False):
-    return p[0] * x[0]**2
+    out = p[0] * x[0]**2
+    return out if not quantize else int(out)
 
 name_quartic = 'quartic'
 parlimits_quartic = [[0, 1], [0, 1e-9]]
 initparams_quartic = [0, 0]
 def fitfunc_quartic(x, p, *args, quantize=False):
-    return -p[0]*x[0] - p[1]*abs(x[0])*(x[0]**3)
+    term1 = -p[0]*x[0]
+    term2 = -p[1]*abs(x[0])*(x[0]**3)
+    if not quantize:
+        return term1 + term2
+    else
+        return int(term1) + int(term2)
 
 name_resfit = 'resfit'
 parlimits_resfit = [[0, 100], [0, 0.1]]
