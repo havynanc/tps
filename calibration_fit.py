@@ -225,6 +225,7 @@ def parseArgs(argv=None):
     parser.add_argument('--etaRegion', choices=['barrel', 'endcap'], help='whether to fit in barrel or endcap')
     parser.add_argument('--overwrite', action='store_true', help='if output directories are allowed to be overwritten (otherwise it is impossible to delete things by mistake)')
     parser.add_argument('--etaWidth', type=int, default=16, help='Width of eta slices used to conduct calibration fits in (default 16)')
+    parser.add_argument('--coarseningRatio', type=int, nargs=3, default=[1, 1, 1], help='coarsen prop_eta, k, coord axes by these 3 factors respectively (default: 1 1 1)')
     parser.add_argument('--fitfunc', type=str, default=None, help='which function to fit dphi vs k to')
     parser.add_argument('--fitfuncArgs', nargs='+', default=[], help='additional args to pass to fitfunc (look in common.py to see what is needed for each fitfunc)')
     parser.add_argument('--resScaling', type=float, default=3, help='multiply sigma by this to get res. Does nothing if in prop mode (default: 3)')
@@ -269,7 +270,7 @@ def main():
     overwrite = args.overwrite
     etaWidth = args.etaWidth
     res_scaling = args.resScaling
-    coarsening_ratio = [1, 9, 2] if mode == 'prop' else [1, 9, 1] #eta, k, dphi
+    coarsening_ratio = args.coarseningRatio #eta, k, dphi
 
     if mode == 'prop':
         fitfunc = initialize_fitfunc(args.fitfunc, mode, *args.fitfuncArgs)

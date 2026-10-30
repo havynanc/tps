@@ -132,7 +132,7 @@ class Propagator:
                 self.barrel_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
                 for param in self.barrel_fitfunc_params[layer]:
                     self.grand_prop_LUT[param] = getattr(prop_module, f'lt_{param}')
-                    
+
             for layer, command in endcap_commands.items():
                 cal_args = command_reader(shlex.split(command)[2:])
                 self.endcap_fitfuncs[layer] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
@@ -186,6 +186,10 @@ def parseArgs():
     parser.add_argument('--outdir', default = './', help='output directory')
     parser.add_argument('--postfix', default= '', help='string to append to output root file name')
     parser.add_argument('--maxCounter', default=240000, help='maximum number of events to consider')
+    parser.add_argument('--propEtaBins', default=512, help='number of bins for prop_eta (default: 512)')
+    parser.add_argument('--kBins', default=81, help='number of bins for k (default: 81) (note: use a power of 3 for rebinning to still be centered at 0)')
+    parser.add_argument('--propCoordBins', default=128, help='number of bins for prop coord (default: 128)')
+    parser.add_argument('--')
     args = parser.parse_args()
     return args
 
@@ -227,18 +231,11 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     os.chdir(outdir)
 
-    #changed lower limit from -16383 to -16384 and -1024 to 1024 bc it makes the bins soooo much nicer
-    #now do the kbinning here explicitly - 64+1 bins to center at limit 16384+512/2 to have bin widths of 512 (original k value were 512, -16383, 1684)
-    #sike I realized the best way to keep it centered at 0 is to use powers of 3
-    #expanded dphi hist in hopes of catching higher values for higher curvatures (1024->2048, keep 256 bc memory issues (could fix by doing 1 layer at a time)
-
     if prop_coord == 'phi':
         bound = 2048 if mode =='prop' else 512
-        nbins = 256
     elif prop_coord == 'eta':
         bound = 64
-        nbins = 128
-    calibrationH = {layer: ROOT.TH3I(f"calibrationH_{layer}","",512,0,512,729,-16384,16384,nbins,-bound-0.5,bound-0.5) for layer in tf_layers}
+    calibrationH = {layer: ROOT.TH3I(f"calibrationH_{layer}", "", args.propEtaBins, 0, 512, args.kBins, -16384, 16384, args.propCoordBins, -bound, bound) for layer in tf_layers}
 
     print(f'Running in {mode} mode, outputting to {outdir}')
 
