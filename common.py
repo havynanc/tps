@@ -426,7 +426,7 @@ def fitfunc_Eloss(x, p, *args, quantize=False):
     term2 = -p[1]*x[1]*abs(x[1])
     if not quantize:
         return term1 + term2
-    else
+    else:
         return int(term1) + int(term2)
 
 name_3param = '3param'
@@ -466,7 +466,7 @@ def fitfunc_quartic(x, p, *args, quantize=False):
     term2 = -p[1]*abs(x[0])*(x[0]**3)
     if not quantize:
         return term1 + term2
-    else
+    else:
         return int(term1) + int(term2)
 
 name_resfit = 'resfit'
