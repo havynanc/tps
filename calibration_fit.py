@@ -19,7 +19,9 @@ def initialize_fitfunc(fitfunc_name, mode, *args):
     fitfunc = ROOT.TF1(fitfunc_name, fitfunc_py, -16384, 16384, len(parlimits))
     for i, pair in enumerate(parlimits):
         fitfunc.SetParLimits(i, pair[0], pair[1])
-    fitfunc.SetParameters(*fitfuncs_info[fitfunc_name]['initparams'])
+    # set one at a time: SetParameters(0) with a lone int resolves to the Double_t* overload (nullptr) and segfaults
+    for i, val in enumerate(fitfuncs_info[fitfunc_name]['initparams']):
+        fitfunc.SetParameter(i, float(val))
 
     # nice for plotting resolution graphs
     if mode == 'res':

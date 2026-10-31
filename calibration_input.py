@@ -186,10 +186,9 @@ def parseArgs():
     parser.add_argument('--outdir', default = './', help='output directory')
     parser.add_argument('--postfix', default= '', help='string to append to output root file name')
     parser.add_argument('--maxCounter', default=240000, help='maximum number of events to consider')
-    parser.add_argument('--propEtaBins', default=512, help='number of bins for prop_eta (default: 512)')
-    parser.add_argument('--kBins', default=81, help='number of bins for k (default: 81) (note: use a power of 3 for rebinning to still be centered at 0)')
-    parser.add_argument('--propCoordBins', default=128, help='number of bins for prop coord (default: 128)')
-    parser.add_argument('--')
+    parser.add_argument('--propEtaBins', type=int, default=512, help='number of bins for prop_eta (default: 512)')
+    parser.add_argument('--kBins', type=int, default=81, help='number of bins for k (default: 81) (note: use a power of 3 for rebinning to still be centered at 0)')
+    parser.add_argument('--propCoordBins', type=int, default=128, help='number of bins for prop coord (default: 128)')
     args = parser.parse_args()
     return args
 
