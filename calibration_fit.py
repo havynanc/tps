@@ -164,21 +164,38 @@ def high_k_error_removal(fitslices_graph, mode, curvature_thresh, removal_thresh
 
 
 # use a first round fit as a baseline to redo fits better
-def window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv_thresh, radius_upper, radius_lower, removal_thresh, window_folder, c, required_offset=100):
+def window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv_thresh, radius_upper, radius_lower, removal_thresh, k_cutoff, window_folder, c, required_offset=0):
 
+    # first draw the initial fit and overlay
+    hist_2d.Draw('COLZ')
+    # fitslices_graph.SetLineColor(ROOT.TColor.GetColorTransparent(9, 1))
+    fitslices_graph.Draw('s')
+    if mode == 'res':
+        try:
+            refl_fitfunc.SetParameters(*fitslices_fit.Parameters())
+            refl_fitfunc.Draw('same')
+        except:
+            pass
+    c.Draw()    
+    c.SaveAs(f'{window_folder}/initial_fit.png')
+
+    # now do the update
     hist_k = hist_2d.ProjectionX()
     for i in range(hist_k.GetNbinsX()+2):
 
         center = hist_k.GetBinCenter(i)
-        if abs(center) < window_curv_thresh:
+        if (abs(center) < window_curv_thresh) or (k_cutoff < abs(center)):
             continue
                                         
         #build histogram, indiscriminately including a radius around the old fit
-        dphi_hist = hist_2d.ProjectionY(f'center k {center}', i, i)
+        dphi_hist = hist_2d.ProjectionY(f'center k {np.round(center, 2)}', i, i)
+        dphi_hist.SetTitle(hist_2d.GetTitle()) #root keeps the old title if it reuses a same-named hist from a previous slice
         for ii in range(0, dphi_hist.GetNbinsX()+2):
             guess_dphi = fitfunc(center)
             bin_dphi = dphi_hist.GetBinCenter(ii)
-            if (abs(bin_dphi) < (abs(guess_dphi) - radius_lower)) or (abs(bin_dphi) > (abs(guess_dphi) + radius_upper)) or (abs(bin_dphi) < required_offset) or (np.sign(bin_dphi) != np.sign(guess_dphi)):
+            lower_limit = guess_dphi - radius_lower if guess_dphi > 0 else guess_dphi - radius_upper
+            upper_limit = guess_dphi + radius_upper if guess_dphi > 0 else guess_dphi + radius_lower
+            if (lower_limit > bin_dphi or bin_dphi > upper_limit or abs(bin_dphi) < required_offset): # or (np.sign(bin_dphi) != np.sign(guess_dphi))):
                 dphi_hist.SetBinContent(ii, 0)
     
         update_point = False
@@ -192,6 +209,7 @@ def window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv
         if n < 2:
             if update_point:
                 fitslices_graph.RemovePoint(point_update_index)
+            dphi_hist.Delete()
             continue
         
         dphi_hist.Draw()
@@ -236,7 +254,8 @@ def parseArgs(argv=None):
     parser.add_argument('--fitParamErrorCutoff', type=float, nargs='+', default=[np.inf, 0.5], help='cutoffs for fit parameters from gaussian fits if tryRangeFit is on (default: inf, 0.5)')
     parser.add_argument('--numEntriesCutoff', type=int, default=2, help='minimum number of entries a 1D dphi histogram must have to be considered (default: 2)')
     parser.add_argument('--peakCutoff', type=int, default=0, help='minimum height of the peak a 1D dphi histogram must have to be considered (default: 0)')
-    parser.add_argument('--initialKcutoff', type=int, default=13000, help='highest |k| bin midpoint to attempt to calibrate over in initial pass (before inclusive) (default: 13000)')
+    parser.add_argument('--initialKcutoff', type=int, default=13000, help='highest |k| bin midpoint to attempt to calibrate over in initial pass (before window refit) (default: 13000)')
+    parser.add_argument('--kCutoff', type=int, default=np.inf, help='highest |k| bin midpoint to calibrate over at any point (default: infinity)')
     parser.add_argument('--minFitslicesPoints', type=int, default=4, help='minimum number of points (slices of k) we must successfully fit in order to perform the overall 2D eta slice histogram fit (default: 4)')
     parser.add_argument('--errorRemovalMaxIterations', type=int, default=20, help='how many times are we allowed to loop through the fitslices error removal algo (0 to skip it, for example for bending angle) (default: 20)')
     parser.add_argument('--errorRemovalCurvatureThresh', type=int, default=None, help='|k| above this will be subject to error removal (default: 3000 for prop, infinity for res)')
@@ -244,6 +263,7 @@ def parseArgs(argv=None):
     parser.add_argument('--windowCurvThresh', type=int, default=None, help='|k| above this will find prop datapoints more inclusively than usual to accomodate sparse data (default: 5000 for prop, infinity for res)')
     parser.add_argument('--windowRadiusLower', type=int, default=200, help='dphi radius about initial fit to consider more inclusive dphi points, in the direction pointing toward 0 (default: 200)')
     parser.add_argument('--windowRadiusUpper', type=int, default=200, help='dphi radius about initial fit to consider more inclusive dphi points, in the direction pointing away from 0 (default: 200)')
+    parser.add_argument('--windowBulkCut', type=int, default=100, help='dphi radius about 0 for the window fit to regard as the bulk and throw out')
     parser.add_argument('--symmetrizationThresh', type=int, default=10, help='minimum number of data points (after initial noise removal) that a 1D dphi hist can have for it to undergo symmetrization (cutting a skewed tail) (default: 10)')
     parser.add_argument('--resReflectSym', action='store_true', help='get better stats in res mode by combining k and -k bins')
     parser.add_argument('--dropCentralKbin', action='store_true', help='drop central k bin for res')
@@ -291,6 +311,7 @@ def main():
     num_entries_cutoff = args.numEntriesCutoff
     peak_cutoff = args.peakCutoff
     initial_k_cutoff = args.initialKcutoff
+    k_cutoff = args.kCutoff
     min_fitslices_points = args.minFitslicesPoints
     error_removal_max_iterations = args.errorRemovalMaxIterations
     error_removal_curvature_thresh = args.errorRemovalCurvatureThresh if args.errorRemovalCurvatureThresh is not None else 3000 if (mode == 'prop') else np.inf
@@ -299,6 +320,7 @@ def main():
     window_curv_thresh = args.windowCurvThresh if args.windowCurvThresh is not None else 5000 if (mode == 'prop') else np.inf
     window_radius_lower = args.windowRadiusLower
     window_radius_upper = args.windowRadiusUpper
+    window_bulk_cut = args.windowBulkCut
 
     symmetrization_thresh = args.symmetrizationThresh
     res_reflect_sym = args.resReflectSym
@@ -479,23 +501,26 @@ def main():
                 if drop_central_k_bin and mode == 'res' and i == hist_2d.GetNbinsX()//2 + 1:
                     continue
                 dphi_hist = hist_2d.ProjectionY(f'center k {np.round(k_axis.GetBinCenter(i), 2)}', i, i)
+                dphi_hist.SetTitle(hist_2d.GetTitle()) #root keeps the old title if it reuses a same-named hist from a previous slice
                 if mode == 'res' and res_reflect_sym:
                     dphi_hist.Add(hist_2d.ProjectionY('', hist_2d.GetNbinsX()+1-i, hist_2d.GetNbinsX()+1-i))
                 # n = dphi_hist.GetEntries()
                 n = dphi_hist.Integral()
                 peakheight = dphi_hist.GetMaximum()
                 if n == 0:
+                    dphi_hist.Delete()
                     continue
                 dphi_hist.Draw()
                 place_stats_box(dphi_hist, c, left=(k_axis.GetBinCenter(i)<0))
                 c.Draw()
                 c.SaveAs(f'{raw_folder}/{i}.png')
                 if n < num_entries_cutoff or peakheight < peak_cutoff:
+                    dphi_hist.Delete()
                     continue
 
-                #for phib, don't look at curvatur too high to be seen (for deltaphi, error removal would take care of this)
-                if abs(k_axis.GetBinCenter(i)) > initial_k_cutoff:
-                    continue 
+                if abs(k_axis.GetBinCenter(i)) > min(initial_k_cutoff, k_cutoff):
+                    dphi_hist.Delete()
+                    continue
                 
                 #The logic here is to try to fit a gaussian in a range around the peak to hopefully capture the bell curve (need the range to cast aside noise).
                 #If the fit fails (either directly or by having a large standard error in its parameters) cut the histogram beyond its central bulge,
@@ -529,7 +554,8 @@ def main():
                     #fit failed/wasn't tried. directly use sample mean and stddv and the standard errors thereof after trimming past the central bulge
                         
                     #look at everything if curvature is high enough (for phib)
-                    trim = not (abs(k_axis.GetBinCenter(i)) > 3000)# and isBarrel)# and coord == 'coord2')
+                    # trim = not (abs(k_axis.GetBinCenter(i)) > 3000)# and isBarrel)# and coord == 'coord2')
+                    trim = True
                     lower_index = -1
                     upper_index = dphi_hist.GetNbinsX() + 2
 
@@ -566,10 +592,12 @@ def main():
                     #should really fix the error calculation for these cases in prop as well. throw them out for now.
                     #also require a minimum number of entries since noise getting mischaracterized always throws trend slope UP - doesn't average out like in prop
                     if mode == 'res' and ((trim and (lower_index + 2 == upper_index)) or n < 5):
+                        dphi_hist.Delete()
                         continue
 
                     # forbid just one or zero entries
                     if n < 2:
+                        dphi_hist.Delete()
                         continue
     
                     #compute params
@@ -603,7 +631,7 @@ def main():
                 
             #update high curvature points using this fit (using more inclusive window criteria), then fit again
             if mode == 'prop':# and isBarrel:
-                fitslices_graph = window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv_thresh, window_radius_upper, window_radius_lower, error_removal_thresh, window_folder, c, required_offset=100)
+                fitslices_graph = window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv_thresh, window_radius_upper, window_radius_lower, error_removal_thresh, k_cutoff, window_folder, c, required_offset=window_bulk_cut)
                 try:
                     fitslices_graph.GetFunction(fitfunc.GetName()).Delete()
                 except:

@@ -418,12 +418,30 @@ def fitfunc_linear(x, p, *args, quantize=False):
     out = -p[0]*x[0]
     return out if not quantize else int(out)
 
-name_Eloss = 'Eloss'
-parlimits_Eloss = [[0, 1], [0, 1]]
-initparams_Eloss = [0, 0]
-def fitfunc_Eloss(x, p, *args, quantize=False):
+name_quadratic = 'quadratic'
+parlimits_quadratic = [[0, 1], [0, 1]]
+initparams_quadratic = [0, 0]
+def fitfunc_quadratic(x, p, *args, quantize=False):
+    correction_sign = int(args[0]) #should be 1 or -1
     term1 = -p[0]*x[0]
-    term2 = -p[1]*x[1]*abs(x[1])
+    term2 = -p[1]*x[0]*abs(x[0]) * correction_sign
+    if not quantize:
+        return term1 + term2
+    else:
+        return int(term1) + int(term2)
+
+name_delayedQuadratic = 'delayedQuadratic'
+parlimits_delayedQuadratic = [[0, 1], [0, 1]]
+initparams_delayedQuadratic = [0, 0]
+def fitfunc_delayedQuadratic(x, p, *args, quantize=False):
+    curvscale = int(args[0])
+    correction_sign = int(args[1]) #should be 1 or -1
+    term1 = -p[0]*x[0]
+    if abs(x[0]) > curvscale:
+        signed_curvscale = curvscale * np.sign(x[0])
+        term2 = -p[1]*(x[0] - signed_curvscale)*abs(x[0] - signed_curvscale)*correction_sign
+    else:
+        term2 = 0
     if not quantize:
         return term1 + term2
     else:
@@ -446,10 +464,9 @@ def fitfunc_3param(x, p, *args, quantize=False):
         term3 = 0
         term4 = 0
     if not quantize:
-        out = term1 + term2 + term3 + term4
+        return term1 + term2 + term3 + term4
     else:
-        out = int(term1) + int(term2) + int(term3) + int(term4)
-    return out
+        return int(term1) + int(term2) + int(term3) + int(term4)
 
 name_pure_quadratic = 'pure_quadratic'
 parlimits_pure_quadratic = [[0, 3e-7]]
@@ -479,7 +496,8 @@ def fitfunc_resfit(x, p, *args, quantize=False):
         return max(16, int(p[0]) + int(p[1]*abs(x[0])))
 
 fitfuncs_info = {name_linear: {'parlimits': parlimits_linear, 'initparams': initparams_linear, 'fitfunc': fitfunc_linear}, 
-                 name_Eloss: {'parlimits': parlimits_Eloss, 'initparams': initparams_Eloss, 'fitfunc': fitfunc_Eloss}, 
+                 name_quadratic: {'parlimits': parlimits_quadratic, 'initparams': initparams_quadratic, 'fitfunc': fitfunc_quadratic}, 
+                 name_delayedQuadratic: {'parlimits': parlimits_delayedQuadratic, 'initparams': initparams_delayedQuadratic, 'fitfunc': fitfunc_delayedQuadratic},
                  name_3param: {'parlimits': parlimits_3param, 'initparams': initparams_3param, 'fitfunc': fitfunc_3param}, 
                  name_pure_quadratic: {'parlimits': parlimits_pure_quadratic, 'initparams': initparams_pure_quadratic, 'fitfunc': fitfunc_pure_quadratic}, 
                  name_quartic: {'parlimits': parlimits_quartic, 'initparams': initparams_quartic, 'fitfunc': fitfunc_quartic}, 
