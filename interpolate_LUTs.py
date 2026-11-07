@@ -32,10 +32,10 @@ def format_graph_command_info(barrel_file, endcap_file):
             endcap_command = barrel_file.Get(f'command_{layer}').GetTitle()
             endcap_commit = barrel_file.Get(f'commit_{layer}').GetTitle()
         
-        barrel_commands_str = barrel_commands_str + f"'{layer}': '{barrel_command}',\n                   "
-        endcap_commands_str = endcap_commands_str + f"'{layer}': '{endcap_command}',\n                   "
-        barrel_commits_str = barrel_commits_str + f"'{layer}': '{barrel_commit}',\n                  "
-        endcap_commits_str = endcap_commits_str + f"'{layer}': '{endcap_commit}',\n                  "
+        barrel_commands_str = barrel_commands_str + f"{layer}: '{barrel_command}',\n                   "
+        endcap_commands_str = endcap_commands_str + f"{layer}: '{endcap_command}',\n                   "
+        barrel_commits_str = barrel_commits_str + f"{layer}: '{barrel_commit}',\n                  "
+        endcap_commits_str = endcap_commits_str + f"{layer}: '{endcap_commit}',\n                  "
     
     barrel_commands_str = barrel_commands_str + '}\n\n'
     endcap_commands_str = endcap_commands_str + '}\n\n'
@@ -85,12 +85,11 @@ def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sa
 
     table = np.zeros(len(sample_eta))
     for i, eta in enumerate(sample_eta):
+        y_this_eta_eval = barrel_graph.Eval(eta) if eta < barrel_limit else endcap_graph.Eval(eta)
         if eta < min_eta_eval:
             table[i] = y_min_eta_eval
-        elif eta < barrel_limit:
-            table[i] = barrel_graph.Eval(eta)
         elif eta < max_eta_eval:
-            table[i] = endcap_graph.Eval(eta)
+            table[i] = y_this_eta_eval
         else:
             table[i] = y_max_eta_eval
 
