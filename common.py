@@ -487,7 +487,7 @@ def fitfunc_quartic(x, p, *args, quantize=False):
         return int(term1) + int(term2)
 
 name_resfit = 'resfit'
-parlimits_resfit = [[0, 100], [0, 0.1]]
+parlimits_resfit = [[0, 100], [0.005, 0.1]]
 initparams_resfit = [100, 0.1]
 def fitfunc_resfit(x, p, *args, quantize=False):
     if not quantize:
@@ -495,13 +495,23 @@ def fitfunc_resfit(x, p, *args, quantize=False):
     else:
         return max(16, int(p[0]) + int(p[1]*abs(x[0])))
 
+name_fullresfit = 'fullresfit'
+parlimits_fullresfit = [[0, 100], [3e-7, 0.1]]
+initparams_fullresfit = [100, 0.1]
+def fitfunc_fullresfit(x, p, *args, quantize=False):
+    if not quantize:
+        return max(16, np.sqrt(p[0] + p[1]*abs(x[0])**2))
+    else:
+        return max(16, np.sqrt(int(p[0]) + int(p[1]*abs(x[0])**2)))
+
 fitfuncs_info = {name_linear: {'parlimits': parlimits_linear, 'initparams': initparams_linear, 'fitfunc': fitfunc_linear}, 
                  name_quadratic: {'parlimits': parlimits_quadratic, 'initparams': initparams_quadratic, 'fitfunc': fitfunc_quadratic}, 
                  name_delayedQuadratic: {'parlimits': parlimits_delayedQuadratic, 'initparams': initparams_delayedQuadratic, 'fitfunc': fitfunc_delayedQuadratic},
                  name_3param: {'parlimits': parlimits_3param, 'initparams': initparams_3param, 'fitfunc': fitfunc_3param}, 
                  name_pure_quadratic: {'parlimits': parlimits_pure_quadratic, 'initparams': initparams_pure_quadratic, 'fitfunc': fitfunc_pure_quadratic}, 
                  name_quartic: {'parlimits': parlimits_quartic, 'initparams': initparams_quartic, 'fitfunc': fitfunc_quartic}, 
-                 name_resfit: {'parlimits': parlimits_resfit, 'initparams': initparams_resfit, 'fitfunc': fitfunc_resfit}
+                 name_resfit: {'parlimits': parlimits_resfit, 'initparams': initparams_resfit, 'fitfunc': fitfunc_resfit},
+                 name_fullresfit: {'parlimits': parlimits_fullresfit, 'initparams': initparams_fullresfit, 'fitfunc': fitfunc_fullresfit}
 }
 
 
