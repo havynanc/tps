@@ -111,8 +111,6 @@ class Propagator:
             self.factor_bits = prop_module.factor_bits
             barrel_commands = prop_module.barrel_commands
             endcap_commands = prop_module.endcap_commands
-
-            self.coeffs = sorted(list(set([key.split('_')[0] for key in barrel_commands.keys() if not key.startswith(('command', 'commit'))])))
             
             self.grand_prop_LUT = {}
             self.barrel_fitfuncs = {}
@@ -151,7 +149,7 @@ class Propagator:
         if self.trivial_propagate:
             return track_coord_int
 
-        params = self.barrel_fitfunc_params if isBarrel else self.endcap_fitfunc_params
+        params = self.barrel_fitfunc_params[layer] if isBarrel else self.endcap_fitfunc_params[layer]
         p = []
         for param in params:
             p.append(self.grand_prop_LUT[param][prop_eta // self.eta_divider] / (2**self.factor_bits[param]))
@@ -162,7 +160,10 @@ class Propagator:
             deltacoord = self.endcap_fitfuncs[layer]([k], p, *self.endcap_fitfunc_args[layer], quantize=True)
         
         if self.prop_coord == 'phi':
-            return deltaPhiINT(track_coord_int + deltacoord, 0)
+            if isBarrel and (layer in phib_layers):
+                return deltaPhiINT(deltacoord, 0)
+            else:
+                return deltaPhiINT(track_coord_int + deltacoord, 0)
         else:
             if track_coord_int < 0:
                 deltacoord = -deltacoord
