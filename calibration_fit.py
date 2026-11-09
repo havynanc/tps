@@ -268,6 +268,7 @@ def parseArgs(argv=None):
     parser.add_argument('--resReflectSym', action='store_true', help='get better stats in res mode by combining k and -k bins')
     parser.add_argument('--dropCentralKbin', action='store_true', help='drop central k bin for res')
     parser.add_argument('--doUnweightedFit', action='store_true', help='do unweighted fit (useful for res)')
+    parser.add_argument('--tailboundsCounterLimit', type=int, default=None, help='Maximum number of allowed empty bins before trimming tails of histogram (default: 1 for prop, 10 for res)')
     args = parser.parse_args(argv)
     return args
 
@@ -326,6 +327,7 @@ def main():
     res_reflect_sym = args.resReflectSym
     drop_central_k_bin = args.dropCentralKbin
     do_unweighted_fit = args.doUnweightedFit
+    tailbounds_counter_limit = args.tailboundsCounterLimit
 
 
     c = ROOT.TCanvas('canvas', 'canvastitle', 1200, 800)
@@ -563,15 +565,16 @@ def main():
 
                         if mode == 'prop':
                             cutoff_factor = None
-                            counter_limit = 1
+                            counter_limit = 1 if tailbounds_counter_limit is None else tailbounds_counter_limit
                             force_center_peak = False
                             dphi_override_radius = None
                             symmetrization_thresh = symmetrization_thresh
                         elif mode == 'res':
-                            cutoff_factor = 20
-                            counter_limit = 5 if (abs(k_axis.GetBinCenter(i)) < 3000) else 20
+                            cutoff_factor = 5
+                            counter_limit = 10 if tailbounds_counter_limit is None else tailbounds_counter_limit
                             force_center_peak = True
-                            dphi_override_radius = 200 if (abs(k_axis.GetBinCenter(i)) > 3000 and isBarrel) else None
+                            # dphi_override_radius = 200 if (abs(k_axis.GetBinCenter(i)) > 3000 and isBarrel) else None
+                            dphi_override_radius = None
                             symmetrization_thresh = np.inf
 
                         upper_index, lower_index = dphi_hist_tail_bounds(dphi_hist, cutoff_factor=cutoff_factor, counter_limit=counter_limit, force_center_peak=force_center_peak, dphi_override_radius=dphi_override_radius, symmetrization_thresh=symmetrization_thresh)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
