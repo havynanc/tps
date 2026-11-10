@@ -476,7 +476,7 @@ def fitfunc_3param(x, p, *args, quantize=False):
         return int(term1) + int(term2) + int(term3) + int(term4)
 
 name_pure_quadratic = 'pure_quadratic'
-parlimits_pure_quadratic = [[0, 3e-7]]
+parlimits_pure_quadratic = [[0, 1]]
 initparams_pure_quadratic = [0]
 def fitfunc_pure_quadratic(x, p, *args, quantize=False):
     out = p[0] * x[0]**2
