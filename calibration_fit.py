@@ -262,6 +262,7 @@ def parseArgs(argv=None):
     parser.add_argument('--errorRemovalMaxIterations', type=int, default=20, help='how many times are we allowed to loop through the fitslices error removal algo (0 to skip it, for example for bending angle) (default: 20)')
     parser.add_argument('--errorRemovalCurvatureThresh', type=int, default=None, help='|k| above this will be subject to error removal (default: 3000 for prop, infinity for res)')
     parser.add_argument('--errorRemovalThresh', type=float, default=None, help='scale the error removal comparison points (adjusted for k ratio) (default: 0.9)')
+    parser.add_argument('--skipWindowRefit', action='store_true', help='skip the window refit that normally applies in prop mode')
     parser.add_argument('--windowCurvThresh', type=int, default=None, help='|k| above this will find prop datapoints more inclusively than usual to accomodate sparse data (default: 5000 for prop, infinity for res)')
     parser.add_argument('--windowRadiusLower', type=int, default=200, help='dphi radius about initial fit to consider more inclusive dphi points, in the direction pointing toward 0 (default: 200)')
     parser.add_argument('--windowRadiusUpper', type=int, default=200, help='dphi radius about initial fit to consider more inclusive dphi points, in the direction pointing away from 0 (default: 200)')
@@ -320,6 +321,7 @@ def main():
     error_removal_curvature_thresh = args.errorRemovalCurvatureThresh if args.errorRemovalCurvatureThresh is not None else 3000 if (mode == 'prop') else np.inf
     error_removal_thresh = args.errorRemovalThresh if args.errorRemovalThresh is not None else 0.9
 
+    skip_window_refit = args.skipWindowRefit
     window_curv_thresh = args.windowCurvThresh if args.windowCurvThresh is not None else 5000 if (mode == 'prop') else np.inf
     window_radius_lower = args.windowRadiusLower
     window_radius_upper = args.windowRadiusUpper
@@ -637,7 +639,7 @@ def main():
             fitslices_fit = fitslices_graph.Fit(fitfunc, options_str, '', -16384, 16384)
                 
             #update high curvature points using this fit (using more inclusive window criteria), then fit again
-            if mode == 'prop':# and isBarrel:
+            if (not skip_window_refit) and (mode == 'prop'):# and isBarrel:
                 fitslices_graph = window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv_thresh, window_radius_upper, window_radius_lower, error_removal_thresh, k_cutoff, window_folder, c, num_entries_min=num_entries_cutoff, required_offset=window_bulk_cut)
                 try:
                     fitslices_graph.GetFunction(fitfunc.GetName()).Delete()
