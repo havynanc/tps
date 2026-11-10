@@ -2,7 +2,7 @@ import numpy as np
 import ROOT
 import os
 import argparse
-from common import barrel_limits, load_module_from_file, get_command_and_commit, tf_layers
+from common import barrel_limits, load_module_from_file, get_command_and_commit, tf_layers, prop_coord_axis_titles
 
 
 

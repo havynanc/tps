@@ -4,8 +4,10 @@ from DataFormats.FWLite import Events, Handle
 ROOT.FWLiteEnabler.enable()
 import os
 import shutil
+import shlex
 import argparse
-from common import barrel_limits, fitfuncs_info, get_command_and_commit, tf_layers, phib_layers
+from common import barrel_limits, fitfuncs_info, get_command_and_commit, tf_layers, phib_layers, prop_coord_axis_titles, bending_angle_axis_title
+from calibration_input import parseArgs as command_reader
 
 
 
@@ -339,7 +341,10 @@ def main():
     rfiles = []
     for input_file in input_files:
         rfiles.append(ROOT.TFile.Open(input_file, 'READ'))
-    hist_names = [key.GetName() for key in rfiles[0].GetListOfKeys()]
+    hist_names = [key.GetName() for key in rfiles[0].GetListOfKeys() if not key.GetName().startswith(('command', 'commit'))]
+    input_command = rfiles[0].Get('command').GetTitle()
+    input_args = command_reader(shlex.split(input_command)[2:])
+    prop_coord = input_args.propCoord
 
     # make output directories and throw an error if we would accidentally overwrite one of the layer directories
     out_paths = []
@@ -388,15 +393,11 @@ def main():
             h.Add(h_temp)
             h_temp.Delete()
 
-        h.GetXaxis().SetTitle('prop_eta')
-        h.GetYaxis().SetTitle('track curvature #it{k}')
         #label for 'dphi' axis depends on what exactly we plotted
-        if (layer in phib_layers) and (eta_region == 'barrel'):
-            h.GetZaxis().SetTitle('bending angle #it{#phi_{b}}')
-        else:
-            h.GetZaxis().SetTitle('propagated angle #it{#Delta#phi}')
-        if mode == 'res':
-            h.GetZaxis().SetTitle(f'res of {h.GetZaxis().GetTitle()}')
+        if (prop_coord == 'phi') and (layer in phib_layers) and (eta_region == 'barrel'):
+            h.GetZaxis().SetTitle(bending_angle_axis_title)
+            if mode == 'res':
+                h.GetZaxis().SetTitle(f'res of {h.GetZaxis().GetTitle()}')
             
         h.Rebin3D(coarsening_ratio[0], coarsening_ratio[1], coarsening_ratio[2]) #not sure about the errors computed with this method
         k_axis = h.GetYaxis()

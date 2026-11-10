@@ -381,6 +381,13 @@ phib_layers = [1, 3, 5, 7]
 phi_layers = [l for l in tf_layers if l not in phib_layers]
 phib_to_phi_layer_map = {1:0, 3:2, 5:4, 7:6}
 
+prop_coord_axis_titles = {'phi': 'propagated angle #it{#Delta#phi}',
+                          'eta': 'propagated #it{#Delta#eta}',
+                          'sinheta': 'propagated #it{#Delta}sinh#it{#eta}',
+                          'z': 'propagated #it{#Delta}#it{z}'}
+
+bending_angle_axis_title = 'bending angle #it{#phi_{b}}'
+
 # barrel if below this (equal ==> endcap but that should never happen)
 barrel_limits = [228, 228, 179, 179, 154, 154, 146, 146, 0, 0]
 
