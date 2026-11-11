@@ -99,22 +99,24 @@ def fetchTPS(event,tag,etamax=3.0):
  
 
 
-class Propagator:
+class FuncLoader:
 
-    def __init__(self, prop_file, prop_coord):
+    def __init__(self, func_file, prop_coord, mode):
 
         self.prop_coord = prop_coord
+        assert mode in ['prop', 'res']
+        self.mode = mode
         
-        if prop_file is None:
-            self.trivial_propagate = True   
+        if func_file is None:
+            self.trivial_func = True   
         else:
-            self.trivial_propagate = False
-            prop_module = load_module_from_file(prop_file)
-            self.factor_bits = prop_module.factor_bits
-            barrel_commands = prop_module.barrel_commands
-            endcap_commands = prop_module.endcap_commands
+            self.trivial_func = False
+            func_module = load_module_from_file(func_file)
+            self.factor_bits = func_module.factor_bits
+            barrel_commands = func_module.barrel_commands
+            endcap_commands = func_module.endcap_commands
             
-            self.grand_prop_LUT = {}
+            self.grand_func_LUT = {}
             self.barrel_fitfuncs = {}
             self.barrel_fitfunc_args = {}
             self.barrel_fitfunc_params = {}
@@ -129,37 +131,57 @@ class Propagator:
                 self.barrel_fitfuncs[layer] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
                 self.barrel_fitfunc_args[layer] = cal_args.fitfuncArgs
                 nparams = len(fitfuncs_info[cal_args.fitfunc]['initparams'])
-                self.barrel_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
+                if self.mode == 'prop':
+                    self.barrel_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
+                elif self.mode == 'res':
+                    self.barrel_fitfunc_params[layer] = [f'res{i}_{layer}' for i in range(nparams)]
                 for param in self.barrel_fitfunc_params[layer]:
-                    self.grand_prop_LUT[param] = getattr(prop_module, f'lt_{param}')
+                    self.grand_func_LUT[param] = getattr(func_module, f'lt_{param}')
 
             for layer, command in endcap_commands.items():
                 cal_args = command_reader(shlex.split(command)[2:])
                 self.endcap_fitfuncs[layer] = fitfuncs_info[cal_args.fitfunc]['fitfunc']
                 self.endcap_fitfunc_args[layer] = cal_args.fitfuncArgs
                 nparams = len(fitfuncs_info[cal_args.fitfunc]['initparams'])
-                self.endcap_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
+                if self.mode == 'prop':
+                    self.endcap_fitfunc_params[layer] = [f'prop{i+1}_{layer}' for i in range(nparams)]
+                elif self.mode == 'res':
+                    self.endcap_fitfunc_params[layer] = [f'res{i}_{layer}' for i in range(nparams)]
                 for param in self.endcap_fitfunc_params[layer]:
-                    self.grand_prop_LUT[param] = getattr(prop_module, f'lt_{param}') # repeating some here is fine since LUTs span all eta
+                    self.grand_func_LUT[param] = getattr(func_module, f'lt_{param}') # repeating some here is fine since LUTs span all eta
 
-            assert 512 % len(getattr(prop_module, f'lt_{next(iter(self.grand_prop_LUT))}')) == 0
-            self.eta_divider = 512 // len(getattr(prop_module, f'lt_{next(iter(self.grand_prop_LUT))}'))
+            assert 512 % len(getattr(func_module, f'lt_{next(iter(self.grand_func_LUT))}')) == 0
+            self.eta_divider = 512 // len(getattr(func_module, f'lt_{next(iter(self.grand_func_LUT))}'))
 
 
-    def propagate(self, track_coord_int, prop_eta, k, layer, isBarrel):
+    def func_eval(self, prop_eta, k, layer, isBarrel):
 
-        if self.trivial_propagate:
-            return track_coord_int
+        if self.trivial_func:
+            if self.mode == 'prop':
+                return 0
+            elif self.mode == 'res':
+                return 10000
+            else:
+                raise Exception 
 
         params = self.barrel_fitfunc_params[layer] if isBarrel else self.endcap_fitfunc_params[layer]
         p = []
         for param in params:
-            p.append(self.grand_prop_LUT[param][prop_eta // self.eta_divider] / (2**self.factor_bits[param]))
+            p.append(self.grand_func_LUT[param][prop_eta // self.eta_divider] / (2**self.factor_bits[param]))
 
         if isBarrel:
-            deltacoord = self.barrel_fitfuncs[layer]([k], p, *self.barrel_fitfunc_args[layer], quantize=True)
+            out = self.barrel_fitfuncs[layer]([k], p, *self.barrel_fitfunc_args[layer], quantize=True)
         else:
-            deltacoord = self.endcap_fitfuncs[layer]([k], p, *self.endcap_fitfunc_args[layer], quantize=True)
+            out = self.endcap_fitfuncs[layer]([k], p, *self.endcap_fitfunc_args[layer], quantize=True)
+
+        return out
+
+
+    def propagate(self, track_coord_int, prop_eta, k, layer, isBarrel):
+
+        assert self.mode == 'prop', 'propagate only makes sense if the FuncLoader is in prop mode'
+
+        deltacoord = self.func_eval(prop_eta, k, layer, isBarrel)
         
         if self.prop_coord == 'phi':
             if isBarrel and (layer in phib_layers):
@@ -168,7 +190,7 @@ class Propagator:
                 return deltaPhiINT(track_coord_int + deltacoord, 0)
         else:
             if track_coord_int < 0:
-                deltacoord = -deltacoord
+                deltacoord = -deltacoord # etalike coords propagate in their magnitudes
             return track_coord_int + deltacoord
 
 
@@ -181,17 +203,20 @@ def parseArgs(argv=None):
     parser.add_argument('--noEosPrefix', action='store_true', help='whether to use raw input file directories (default is to give them a prefix that is needed if they are in fnal eos)')
     parser.add_argument('--inSample', help='which element of inFile to use (if inFile is a python dictionary)')
     parser.add_argument('--phiPropFile', default=None, help='python file (output from interpolate_LUTs.py) containing prop coefficients and functions to update the matching condition for phi')
+    parser.add_argument('--phiResFile', default=None, help='python file (output from interpolate_LUTs.py) containing res coefficients and functions to update the matching condition for phi')
+    parser.add_argument('--phiResMultiplier', type=float, default=1, help='scale the max allowed phi residual for a match by this value (default: 1)')
     parser.add_argument('--etalikePropFile', default=None, help='python file (output from interpolate_LUTs.py) containing prop coefficients and functions to use for eta-like in res mode (matching condiiton is still wide eta for now)')
-    parser.add_argument('--usePreviouslyMatchedMuons', action='store_true', help='Only consider stubs from and require tracks to be matched to preexisting tps muons')
+    parser.add_argument('--useEtaDiffMatching', action='store_true', help='Use an eta difference as the etalike matching condition (this is default if etalikePropFile is not specified, otherwise etalike matching is done with that propagation)')
+    parser.add_argument('--matchEtalikeWindow', type=int, default=261, help='Window of delta etalike that a track-stub pair must fall in to be considered a match (necessary but not sufficeint) (default: 261)')
+    parser.add_argument('--usePreviouslyMatchedMuons', action='store_true', help='Only consider stubs from and require tracks to be matched to preexisting tps muons (ignores matching conditions)')
     parser.add_argument('--outdir', default = './', help='output directory')
     parser.add_argument('--postfix', default= '', help='string to append to output root file name')
-    parser.add_argument('--maxCounter', default=240000, help='maximum number of events to consider')
+    parser.add_argument('--maxCounter', type=int, default=240000, help='maximum number of events to consider')
     parser.add_argument('--propEtaBins', type=int, default=512, help='number of bins for prop_eta (default: 512)')
     parser.add_argument('--kBins', type=int, default=81, help='number of bins for k (default: 81) (note: use a power of 3 for rebinning to still be centered at 0)')
     parser.add_argument('--propCoordBins', type=int, default=128, help='number of bins for prop coord (default: 128)')
     parser.add_argument('--propZ0Adjustment', action='store_true', help='whether to adjust for track z0 for eta-like propagations')
     parser.add_argument('--requiredEtaQualities', type=int, nargs='+', help='only allow stubs with these eta qualities')
-    parser.add_argument('--matchEtaWindow', type=float, default=0.2, help='Window of delta eta that a track-stub pair must fall in to be considered a match (necessary but not sufficeint) (default: 0.2)')
     args = parser.parse_args(argv)
     return args
 
@@ -206,14 +231,17 @@ def main():
     eos_prefix = not args.noEosPrefix
     in_sample = args.inSample
     phi_prop_file = args.phiPropFile
+    phi_res_file = args.phiResFile
+    phi_res_multiplier = args.phiResMultiplier
     etalike_prop_file = args.etalikePropFile
+    use_eta_diff_matching = args.useEtaDiffMatching
+    match_etalike_window = args.matchEtalikeWindow
     use_previously_matched_muons = args.usePreviouslyMatchedMuons
     outdir = args.outdir
     postfix = args.postfix
-    maxCounter = int(args.maxCounter)
+    maxCounter = args.maxCounter
     prop_z0_adjustment = args.propZ0Adjustment
     required_eta_qualities = args.requiredEtaQualities
-    match_eta_window = args.matchEtaWindow
     
     # read input events
     try:
@@ -230,8 +258,9 @@ def main():
         events = Events([strAppend(in_file)]) if eos_prefix else Events([f'file:{in_file}'])
 
     # read prop information if given
-    phi_propagator = Propagator(phi_prop_file, 'phi')
-    etalike_propagator = Propagator(etalike_prop_file, 'etalike')
+    phi_propagator = FuncLoader(phi_prop_file, 'phi', 'prop')
+    phi_res_calculator = FuncLoader(phi_res_file, 'phi', 'res')
+    etalike_propagator = FuncLoader(etalike_prop_file, 'etalike', 'prop')
 
     # build etalike propagation and residual helper function
     def etalike_helper(gmt_eta, track_tanl, stub, track_z0, track_z0_cm):
@@ -320,10 +349,14 @@ def main():
             track_z0_cm = track_z0 * (20.46912512 / (1<<11))
             
             # now handle track-stub matching
+            # technique is to first define a window of delta etalike that the pair must satisfy, then within all candidates take the one with the closest phi match
+            # "delta etalike" here is most intuitively a difference in eta, but if we have a prop etalike file then it is by default the residual in that
+            # if a phi res module is given, the candidates are also required to satisfy a delta phi requirement
+            # for now, we do not think about using an eta res module here and always use only phi to differentiate candidates
             best_stubs_by_layer = {layer: None for layer in tf_layers}
             phi_diffs_by_layer = {layer: 10000 for layer in tf_layers}
             etalike_diffs_by_layer = {layer: 10000 for layer in tf_layers}
-            phi_resids_by_layer = {layer: 10000 for layer in tf_layers}
+            phi_resids_by_layer = {layer: phi_res_calculator.func_eval(prop_eta, track_curvature, layer, track_is_barrel[layer])*phi_res_multiplier for layer in tf_layers}
             etalike_resids_by_layer = {layer: 10000 for layer in tf_layers}
 
             if use_previously_matched_muons:
@@ -376,17 +409,22 @@ def main():
                             stub_phi = int((1<<12)*stub.offline_coord1()/math.pi)
                             propagated_phi = phi_propagator.propagate(gmt_phi, prop_eta, track_curvature, layer, track_is_barrel[layer])
                             phi_resid = deltaPhiINT(stub_phi, propagated_phi)
-                            match_eta_resid = stub.offline_eta1() - track.eta() #use wide eta matching condition for now regardless of eta prop mode
 
+                            track_etalike, stub_etalike, z0_adj = etalike_helper(gmt_eta, track_tanl, stub, track_z0, track_z0_cm)
+                            propagated_etalike = etalike_propagator.propagate(track_etalike, prop_eta, track_curvature, stub.tfLayer(), track_is_barrel[stub.tfLayer()])
+                            etalike_resid = (stub_etalike - propagated_etalike - z0_adj) if gmt_eta > 0 else (-stub_etalike + propagated_etalike + z0_adj)
+                            if use_eta_diff_matching:
+                                match_etalike_resid = int((1<<12)*(stub.offline_eta1() - track.eta())/math.pi)
+                            else:
+                                match_etalike_resid = etalike_resid
+                            
                             if not ((layer in phib_layers) and stub.isBarrel() and (prop_coord == 'phi')):
-                                if (abs(phi_resid) < abs(phi_resids_by_layer[layer])) and (abs(match_eta_resid) < match_eta_window):
+                                if (abs(phi_resid) < abs(phi_resids_by_layer[layer])) and (abs(match_etalike_resid) < match_etalike_window):
                                     best_stubs_by_layer[layer] = stub
                                     phi_diffs_by_layer[layer] = deltaPhiINT(stub_phi, gmt_phi)
                                     phi_resids_by_layer[layer] = phi_resid
-                                    track_etalike, stub_etalike, z0_adj = etalike_helper(gmt_eta, track_tanl, stub, track_z0, track_z0_cm)
                                     etalike_diffs_by_layer[stub.tfLayer()] = (stub_etalike - track_etalike - z0_adj) if gmt_eta > 0 else (-stub_etalike + track_etalike + z0_adj)
-                                    propagated_etalike = etalike_propagator.propagate(track_etalike, prop_eta, track_curvature, stub.tfLayer(), track_is_barrel[stub.tfLayer()])
-                                    etalike_resids_by_layer[stub.tfLayer()] = (stub_etalike - propagated_etalike - z0_adj) if gmt_eta > 0 else (-stub_etalike + propagated_etalike + z0_adj)
+                                    etalike_resids_by_layer[stub.tfLayer()] = etalike_resid
                             else:
                                 # if this stub has bending angle, check if the corresponding stub carrying phi was matched
                                 matched_phi_stub = best_stubs_by_layer[phib_to_phi_layer_map[layer]]
@@ -395,10 +433,8 @@ def main():
                                         best_stubs_by_layer[layer] = stub
                                         phi_diffs_by_layer[layer] = stub_phi
                                         phi_resids_by_layer[layer] = phi_resid
-                                        track_etalike, stub_etalike, z0_adj = etalike_helper(gmt_eta, track_tanl, stub, track_z0, track_z0_cm)
                                         etalike_diffs_by_layer[stub.tfLayer()] = (stub_etalike - track_etalike - z0_adj) if gmt_eta > 0 else (-stub_etalike + track_etalike + z0_adj)
-                                        propagated_etalike = etalike_propagator.propagate(track_etalike, prop_eta, track_curvature, stub.tfLayer(), track_is_barrel[stub.tfLayer()])
-                                        etalike_resids_by_layer[stub.tfLayer()] = (stub_etalike - propagated_etalike - z0_adj) if gmt_eta > 0 else (-stub_etalike + propagated_etalike + z0_adj)
+                                        etalike_resids_by_layer[stub.tfLayer()] = etalike_resid
                                         break
 
             # fill output histograms with results of matching
