@@ -256,6 +256,8 @@ def parseArgs(argv=None):
     parser.add_argument('--fitParamErrorCutoff', type=float, nargs='+', default=[np.inf, 0.5], help='cutoffs for fit parameters from gaussian fits if tryRangeFit is on (default: inf, 0.5)')
     parser.add_argument('--numEntriesCutoff', type=int, default=2, help='minimum number of entries a 1D dphi histogram must have to be considered (default: 2)')
     parser.add_argument('--peakCutoff', type=int, default=0, help='minimum height of the peak a 1D dphi histogram must have to be considered (default: 0)')
+    parser.add_argument('--initialKmin', type=int, default=0, help='lowest |k| bin midpoint to attempt to calibrate over in initial pass (before window refit) (default: 0)')
+    parser.add_argument('--kMin', type=int, default=0, help='lowest |k| bin midpoint to calibrate over at any point (default: 0)')
     parser.add_argument('--initialKcutoff', type=int, default=13000, help='highest |k| bin midpoint to attempt to calibrate over in initial pass (before window refit) (default: 13000)')
     parser.add_argument('--kCutoff', type=int, default=np.inf, help='highest |k| bin midpoint to calibrate over at any point (default: infinity)')
     parser.add_argument('--minFitslicesPoints', type=int, default=4, help='minimum number of points (slices of k) we must successfully fit in order to perform the overall 2D eta slice histogram fit (default: 4)')
@@ -272,6 +274,7 @@ def parseArgs(argv=None):
     parser.add_argument('--dropCentralKbin', action='store_true', help='drop central k bin for res')
     parser.add_argument('--doUnweightedFit', action='store_true', help='do unweighted fit (useful for res)')
     parser.add_argument('--tailboundsCounterLimit', type=int, default=None, help='Maximum number of allowed empty bins before trimming tails of histogram (default: 1 for prop, 10 for res)')
+    parser.add_argument('--tailboundsCutoffFactor', type=float, default=None, help='Peak divided by this constitute the maximum value to be considered a tail to be trimmed (default: infinity for prop, 5 for res)')
     args = parser.parse_args(argv)
     return args
 
@@ -314,6 +317,8 @@ def main():
 
     num_entries_cutoff = args.numEntriesCutoff
     peak_cutoff = args.peakCutoff
+    initial_k_min = args.initialKmin
+    k_min = args.kMin
     initial_k_cutoff = args.initialKcutoff
     k_cutoff = args.kCutoff
     min_fitslices_points = args.minFitslicesPoints
@@ -332,6 +337,7 @@ def main():
     drop_central_k_bin = args.dropCentralKbin
     do_unweighted_fit = args.doUnweightedFit
     tailbounds_counter_limit = args.tailboundsCounterLimit
+    tailbounds_cutoff_factor = args.tailboundsCutoffFactor
 
 
     c = ROOT.TCanvas('canvas', 'canvastitle', 1200, 800)
@@ -526,6 +532,9 @@ def main():
                 if abs(k_axis.GetBinCenter(i)) > min(initial_k_cutoff, k_cutoff):
                     dphi_hist.Delete()
                     continue
+                if abs(k_axis.GetBinCenter(i)) < max(initial_k_min, k_min):
+                    dphi_hist.Delete()
+                    continue
                 
                 #The logic here is to try to fit a gaussian in a range around the peak to hopefully capture the bell curve (need the range to cast aside noise).
                 #If the fit fails (either directly or by having a large standard error in its parameters) cut the histogram beyond its central bulge,
@@ -567,13 +576,13 @@ def main():
                     if trim:
 
                         if mode == 'prop':
-                            cutoff_factor = None
+                            cutoff_factor = tailbounds_cutoff_factor
                             counter_limit = 1 if tailbounds_counter_limit is None else tailbounds_counter_limit
                             force_center_peak = False
                             dphi_override_radius = None
                             symmetrization_thresh = symmetrization_thresh
                         elif mode == 'res':
-                            cutoff_factor = 5
+                            cutoff_factor = 5 if tailbounds_cutoff_factor is None else tailbounds_cutoff_factor
                             counter_limit = 10 if tailbounds_counter_limit is None else tailbounds_counter_limit
                             force_center_peak = True
                             # dphi_override_radius = 200 if (abs(k_axis.GetBinCenter(i)) > 3000 and isBarrel) else None
@@ -640,7 +649,7 @@ def main():
                 
             #update high curvature points using this fit (using more inclusive window criteria), then fit again
             if (not skip_window_refit) and (mode == 'prop'):# and isBarrel:
-                fitslices_graph = window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, window_curv_thresh, window_radius_upper, window_radius_lower, error_removal_thresh, k_cutoff, window_folder, c, num_entries_min=num_entries_cutoff, required_offset=window_bulk_cut)
+                fitslices_graph = window_fitslices_update(fitslices_graph, mode, fitfunc, hist_2d, max(window_curv_thresh, k_min), window_radius_upper, window_radius_lower, error_removal_thresh, k_cutoff, window_folder, c, num_entries_min=num_entries_cutoff, required_offset=window_bulk_cut)
                 try:
                     fitslices_graph.GetFunction(fitfunc.GetName()).Delete()
                 except:
