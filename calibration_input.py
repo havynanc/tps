@@ -418,7 +418,7 @@ def main():
                             else:
                                 match_etalike_resid = etalike_resid
                             
-                            if not ((layer in phib_layers) and stub.isBarrel() and (prop_coord == 'phi')):
+                            if not ((layer in phib_layers) and stub.isBarrel()):
                                 if (abs(phi_resid) < abs(phi_resids_by_layer[layer])) and (abs(match_etalike_resid) < match_etalike_window):
                                     best_stubs_by_layer[layer] = stub
                                     phi_diffs_by_layer[layer] = deltaPhiINT(stub_phi, gmt_phi)
