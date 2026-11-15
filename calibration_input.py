@@ -307,7 +307,7 @@ def main():
         calibrationH[layer].GetYaxis().SetTitle('track curvature #it{k}')
         calibrationH[layer].GetZaxis().SetTitle(prop_coord_axis_titles[prop_coord]) # this will be changed to bending angle on the fly during fits depending on coord, layer, and eta region
         if mode == 'res':
-            calibrationH[layer].GetZaxis().SetTitle(f'res of {h.GetZaxis().GetTitle()}')
+            calibrationH[layer].GetZaxis().SetTitle(f'res of {calibrationH[layer].GetZaxis().GetTitle()}')
 
     print(f'Running in {mode} mode, outputting to {outdir}')
 
