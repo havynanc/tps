@@ -2,7 +2,7 @@ import numpy as np
 import ROOT
 import os
 import argparse
-from common import barrel_limits, load_module_from_file, get_command_and_commit, tf_layers, prop_coord_axis_titles
+from common import barrel_limits, load_module_from_file, get_command_and_commit, tf_layers, prop_coord_axis_titles, phib_layers, phib_to_phi_layer_map
 
 
 
@@ -46,7 +46,7 @@ def format_graph_command_info(barrel_file, endcap_file):
 
 
 
-def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sample_eta, barrel_limit):
+def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sample_eta, barrel_limit, zero_barrel, zero_endcap):
 
     if barrel_graph is None:
         barrel_graph = endcap_graph
@@ -85,7 +85,18 @@ def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sa
 
     table = np.zeros(len(sample_eta))
     for i, eta in enumerate(sample_eta):
-        y_this_eta_eval = barrel_graph.Eval(eta) if eta < barrel_limit else endcap_graph.Eval(eta)
+        if eta < barrel_limit:
+            if zero_barrel:
+                y_this_eta_eval = 0
+                continue
+            else:
+                y_this_eta_eval = barrel_graph.Eval(eta)
+        else:
+            if zero_endcap:
+                y_this_eta_eval = 0
+                continue
+            else:
+                y_this_eta_eval = endcap_graph.Eval(eta)
         if eta < min_eta_eval:
             table[i] = y_min_eta_eval
         elif eta < max_eta_eval:
@@ -120,6 +131,9 @@ def parseArgs(argv=None):
     parser.add_argument('--outdir', default='./output_LUTs/', help='Directory to write outputs in (default: ./output_LUts/)')
     parser.add_argument('--overwrite', action='store_true', help='overwrite existing LUTs that this would collide with')
     parser.add_argument('--config', help='python file containing config for interpolation and LUT format')
+    parser.add_argument('--zeroOverrideBarrel', type=int, nargs='+', default=[], help='layers for which to override barrel fit coeffs with 0')
+    parser.add_argument('--zeroOverrideEndcap', type=int, nargs='+', default=[], help='layers for which to override endcap fit coeffs with 0')
+    parser.add_argument('--replacePhibBarrelLayers', action='store_true', help='fill barrel LUTs corresponding to phib layers with their phi layer counterparts instead')
     args = parser.parse_args(argv)
     return args
 
@@ -145,6 +159,10 @@ def main():
     factor_bits = config.factor_bits
     lut_bits = config.lut_bits
     trash_eta_zones_by_layer = config.trash_eta_zones_by_layer
+
+    zero_override_barrel = args.zeroOverrideBarrel
+    zero_override_endcap = args.zeroOverrideEndcap
+    phib_override = args.replacePhibBarrelLayers
 
     outfile_txt_name = f'{outdir}/{mode}_LUTs.txt'
     outfile_py_name = f'{outdir}/{mode}_LUTs.py'
@@ -211,10 +229,16 @@ def main():
         param, layer = name.split('_')
         layer = int(layer)
         
-        barrel_graph = barrel_file.Get(name) if region != 'endcap' else None
+        if region != 'endcap':
+            if phib_override and (layer in phib_layers):
+                barrel_graph = barrel_file.Get(f'{param}_{phib_to_phi_layer_map[layer]}')
+            else:
+                barrel_graph = barrel_file.Get(name)
         endcap_graph = endcap_file.Get(name) if region != 'barrel' else None
         trash_eta_zones = trash_eta_zones_by_layer[layer]
-        table, interpo_graph, barrel_graph, endcap_graph = clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sample_eta, barrel_limits[layer])
+        zero_barrel = layer in zero_override_barrel
+        zero_endcap = layer in zero_override_endcap
+        table, interpo_graph, barrel_graph, endcap_graph = clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sample_eta, barrel_limits[layer], zero_barrel, zero_endcap)
         
         # save diagnostic plot
         interpo_graph.Draw('AL')
