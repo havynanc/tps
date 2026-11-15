@@ -482,6 +482,45 @@ def fitfunc_pure_quadratic(x, p, *args, quantize=False):
     out = p[0] * x[0]**2
     return out if not quantize else int(out)
 
+name_quadratic_abscubic = 'quadratic_abscubic'
+parlimits_quadratic_abscubic = [[0, 1], [0, 1]]
+initparams_quadratic_abscubic = [0, 0]
+def fitfunc_quadratic_abscubic(x, p, *args, quantize=False):
+    term1 = p[0] * x[0]**2
+    term2 = p[1] * abs(x[0]**3)
+    if not quantize:
+        return term1 + term2
+    else:
+        return int(term1) + int(term2)
+
+name_quadratic_quartic = 'quadratic_quartic'
+parlimits_quadratic_quartic = [[0, 1], [0, 1]]
+initparams_quadratic_quartic = [0, 0]
+def fitfunc_quadratic_quartic(x, p, *args, quantize=False):
+    term1 = p[0] * x[0]**2
+    term2 = p[1] * x[0]**4
+    if not quantize:
+        return term1 + term2
+    else:
+        return int(term1) + int(term2)
+
+name_quadratic_recenter = 'quadratic_recenter'
+parlimits_quadratic_recenter = [[0, 1], [0, 1]]
+initparams_quadratic_recenter = [0, 0]
+def fitfunc_quadratic_recenter(x, p, *args, quantize=False):
+    curvscale = int(args[0])
+    term1 = p[0]*min(curvscale**2, x[0]*x[0])
+    if abs(x[0]) > curvscale:
+        term2 = p[0]*2*curvscale*(abs(x[0]) - curvscale)
+        term3 = p[1]*(abs(x[0])-curvscale)*(abs(x[0])-curvscale)
+    else:
+        term2 = 0
+        term3 = 0
+    if not quantize:
+        return term1 + term2 + term3
+    else:
+        return int(term1) + int(term2) + int(term3)
+
 name_quartic = 'quartic'
 parlimits_quartic = [[0, 1], [0, 1e-9]]
 initparams_quartic = [0, 0]
@@ -516,6 +555,9 @@ fitfuncs_info = {name_linear: {'parlimits': parlimits_linear, 'initparams': init
                  name_delayedQuadratic: {'parlimits': parlimits_delayedQuadratic, 'initparams': initparams_delayedQuadratic, 'fitfunc': fitfunc_delayedQuadratic},
                  name_3param: {'parlimits': parlimits_3param, 'initparams': initparams_3param, 'fitfunc': fitfunc_3param}, 
                  name_pure_quadratic: {'parlimits': parlimits_pure_quadratic, 'initparams': initparams_pure_quadratic, 'fitfunc': fitfunc_pure_quadratic}, 
+                 name_quadratic_abscubic: {'parlimits': parlimits_quadratic_abscubic, 'initparams': initparams_quadratic_abscubic, 'fitfunc': fitfunc_quadratic_abscubic}, 
+                 name_quadratic_quartic: {'parlimits': parlimits_quadratic_quartic, 'initparams': initparams_quadratic_quartic, 'fitfunc': fitfunc_quadratic_quartic}, 
+                 name_quadratic_recenter: {'parlimits': parlimits_quadratic_recenter, 'initparams': initparams_quadratic_recenter, 'fitfunc': fitfunc_quadratic_recenter}, 
                  name_quartic: {'parlimits': parlimits_quartic, 'initparams': initparams_quartic, 'fitfunc': fitfunc_quartic}, 
                  name_resfit: {'parlimits': parlimits_resfit, 'initparams': initparams_resfit, 'fitfunc': fitfunc_resfit},
                  name_fullresfit: {'parlimits': parlimits_fullresfit, 'initparams': initparams_fullresfit, 'fitfunc': fitfunc_fullresfit}
