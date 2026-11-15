@@ -592,7 +592,7 @@ def main():
                         upper_index, lower_index = dphi_hist_tail_bounds(dphi_hist, cutoff_factor=cutoff_factor, counter_limit=counter_limit, force_center_peak=force_center_peak, dphi_override_radius=dphi_override_radius, symmetrization_thresh=symmetrization_thresh)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 
                         #try to remedy double peaks from noise and signal being close in phib
-                        if mode == 'prop' and (layer in phib_layers):
+                        if prop_coord == 'phi' and mode == 'prop' and (layer in phib_layers):
                             upper_index, lower_index = dphi_hist_doublepeak_bounds(dphi_hist, upper_index, lower_index)
 
                         #now actually trim the data
