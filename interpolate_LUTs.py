@@ -53,8 +53,6 @@ def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sa
     if endcap_graph is None:
         endcap_graph = barrel_graph
 
-    eta_width = barrel_graph.GetPointX(1) - barrel_graph.GetPointX(0) #assumes uniform eta_width
-
     barrel_graph = barrel_graph.Clone(f'{barrel_graph.GetName()}_clone')
     endcap_graph = endcap_graph.Clone(f'{endcap_graph.GetName()}_clone')
 
@@ -74,8 +72,10 @@ def clean_and_interpolate_graphs(barrel_graph, endcap_graph, trash_eta_zones, sa
     lower_eta_graph = barrel_graph if barrel_graph.GetN() != 0 else endcap_graph
     upper_eta_graph = endcap_graph if endcap_graph.GetN() != 0 else barrel_graph
 
-    min_eta_eval = min(lower_eta_graph.GetX()) - eta_width/2
-    max_eta_eval = max(upper_eta_graph.GetX()) + eta_width/2
+    lower_eta_graph.Sort()
+    upper_eta_graph.Sort()
+    min_eta_eval = lower_eta_graph.GetPointX(0) - lower_eta_graph.GetErrorX(0)
+    max_eta_eval = upper_eta_graph.GetPointX(upper_eta_graph.GetN()-1) + upper_eta_graph.GetErrorX(upper_eta_graph.GetN()-1)
 
     y_min_eta_eval = lower_eta_graph.Eval(min_eta_eval)
     y_max_eta_eval = upper_eta_graph.Eval(max_eta_eval)
@@ -234,6 +234,8 @@ def main():
                 barrel_graph = barrel_file.Get(f'{param}_{phib_to_phi_layer_map[layer]}')
             else:
                 barrel_graph = barrel_file.Get(name)
+        else:
+            barrel_graph = None
         endcap_graph = endcap_file.Get(name) if region != 'barrel' else None
         trash_eta_zones = trash_eta_zones_by_layer[layer]
         zero_barrel = layer in zero_override_barrel

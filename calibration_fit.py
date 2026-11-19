@@ -247,6 +247,7 @@ def parseArgs(argv=None):
     parser.add_argument('--etaRegion', choices=['barrel', 'endcap'], help='whether to fit in barrel or endcap')
     parser.add_argument('--overwrite', action='store_true', help='if output directories are allowed to be overwritten (otherwise it is impossible to delete things by mistake)')
     parser.add_argument('--etaWidth', type=int, default=16, help='Width of eta slices used to conduct calibration fits in (default 16)')
+    parser.add_argument('--etaBinEdges', type=int, nargs='+', help='Edges of eta bins (including overall left and right edges) to conduct calibration fits in if not using default of uniform bin width. Overrides --etaWidth')
     parser.add_argument('--coarseningRatio', type=int, nargs=3, default=[1, 1, 1], help='coarsen prop_eta, k, coord axes by these 3 factors respectively (default: 1 1 1)')
     parser.add_argument('--fitfunc', type=str, default=None, help='which function to fit dphi vs k to')
     parser.add_argument('--fitfuncArgs', nargs='+', default=[], help='additional args to pass to fitfunc (look in common.py to see what is needed for each fitfunc)')
@@ -298,6 +299,7 @@ def main():
     eta_region = args.etaRegion
     overwrite = args.overwrite
     etaWidth = args.etaWidth
+    eta_bin_edges = args.etaBinEdges
     res_scaling = args.resScaling
     coarsening_ratio = args.coarseningRatio #eta, k, dphi
 
@@ -438,18 +440,19 @@ def main():
 
         #now do fits in slices of eta
         #normal layers - width 16 or 32, full range 0-512 (511 is highest)
-        etaList = np.arange(0, 512+1, etaWidth)
+        etaList = eta_bin_edges if eta_bin_edges is not None else np.arange(0, 512+1, etaWidth)
             
         for j in range(len(etaList) - 1):
         
             etaLower = int(etaList[j])
             etaUpper = int(etaList[j+1] - 1) #inclusive on the right bound for some reason
+            eta_bin_width = (etaUpper + 1 - etaLower)
 
             #see if we're in barrel, endcap, or including sections of both (skip these sections)
             #if (etaLower < barrel_limits[layer]) and (etaUpper > barrel_limits[layer]):
             #    continue
             #determine with midpoint - plays nicely with the specific barrel limits we have
-            isBarrel = (etaLower + etaWidth/2) < barrel_limits[layer]
+            isBarrel = (etaLower + eta_bin_width/2) < barrel_limits[layer]
             if (isBarrel and eta_region == 'endcap') or ((not isBarrel) and eta_region == 'barrel'):
                 continue
             
@@ -659,8 +662,8 @@ def main():
             #add these fitted params to the output graphs if they have enough points 
             if (fitslices_graph.GetN() >= min_fitslices_points):
                 for k, layer_coeff_graphs in enumerate(coeff_graphs):
-                    layer_coeff_graphs[layer].AddPoint(etaLower + etaWidth/2, fitslices_fit.Parameter(k))
-                    layer_coeff_graphs[layer].SetPointError(layer_coeff_graphs[layer].GetN()-1, etaWidth/2, fitslices_fit.ParError(k))
+                    layer_coeff_graphs[layer].AddPoint(etaLower + eta_bin_width/2, fitslices_fit.Parameter(k))
+                    layer_coeff_graphs[layer].SetPointError(layer_coeff_graphs[layer].GetN()-1, eta_bin_width/2, fitslices_fit.ParError(k))
         
             #get the 2d hist and fit graph overlaid to check that it makes sense
             hist_2d.Draw('COLZ')
